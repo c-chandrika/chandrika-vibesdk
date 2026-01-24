@@ -108,12 +108,12 @@
         }
     ],
     "kv_namespaces": [
-    {
-      "binding": "KV",
-      "id": "2dd63708738d443e946a28f39cf86917",
-      "remote": true
-    }
-  ],
+        {
+            "binding": "KV",
+            "id": "2dd63708738d443e946a28f39cf86917",
+            "remote": true
+        }
+    ],
     // "placement": {
     //   "mode": "smart"
     // },
@@ -158,10 +158,20 @@
             },
             "version": "1.0.0"
         },
-        "CUSTOM_DOMAIN": "localhost:5173",
+        "CUSTOM_DOMAIN": "vibesdk-nxtwave.tech",
         "MAX_SANDBOX_INSTANCES": "10",
         "SANDBOX_INSTANCE_TYPE": "standard-3"
     },
 	"workers_dev": true,
-	"preview_urls": true
+    "preview_urls": true,
+    "routes": [
+        {
+            "pattern": "vibesdk-nxtwave.tech",
+            "custom_domain": true
+        },
+        {
+            "pattern": "*vibesdk-nxtwave.tech/*",
+            "custom_domain": false
+        }
+    ]
 }
