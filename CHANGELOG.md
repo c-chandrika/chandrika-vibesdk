@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0 (2026-01-24)
+
+
+### Features
+
+* cloned vibesdk ([d55bd6e](https://github.com/c-chandrika/chandrika-vibesdk/commit/d55bd6ec4699668d98ab81b5421c9972fda27880))
+
 ## [1.4.0](https://github.com/cloudflare/vibesdk/compare/v1.3.0...v1.4.0) (2025-12-20)
 
 
