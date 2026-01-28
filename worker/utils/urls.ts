@@ -7,9 +7,15 @@ export const getProtocolForHost = (host: string): string => {
 }
 export function getPreviewDomain(env: Env): string {
     if (env.CUSTOM_PREVIEW_DOMAIN && env.CUSTOM_PREVIEW_DOMAIN.trim() !== '') {
-        return env.CUSTOM_PREVIEW_DOMAIN;
+        // Remove protocol if present (domain only)
+        return env.CUSTOM_PREVIEW_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '');
     }
-    return env.CUSTOM_DOMAIN;
+    // For local dev, if CUSTOM_DOMAIN is empty or localhost, use 'localhost' for worker dev
+    if (!env.CUSTOM_DOMAIN || env.CUSTOM_DOMAIN.trim() === '' || env.CUSTOM_DOMAIN.includes('localhost')) {
+        return 'localhost';
+    }
+    // Remove protocol if present (domain only)
+    return env.CUSTOM_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '');
 }
 
 export function buildUserWorkerUrl(env: Env, deploymentId: string): string {
@@ -43,7 +49,14 @@ export function migratePreviewUrl(storedUrl: string | undefined, env: Env): stri
         const subdomain = hostname.slice(0, firstDotIndex);
 
         // Rebuild with current domain
-        return `${url.protocol}//${subdomain}.${currentDomain}${url.pathname}`;
+        let migratedUrl = `${url.protocol}//${subdomain}.${currentDomain}${url.pathname}`;
+        
+        // Normalize protocol for localhost (should be http:// not https://)
+        if (currentDomain && (currentDomain.includes('localhost') || currentDomain.includes('127.0.0.1'))) {
+            migratedUrl = migratedUrl.replace(/^https:\/\//, 'http://');
+        }
+        
+        return migratedUrl;
     } catch {
         return storedUrl;
     }

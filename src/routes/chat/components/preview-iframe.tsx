@@ -33,6 +33,26 @@ const getRetryDelay = (attempt: number): number => {
 	return Math.min(1000 * Math.pow(2, attempt), 8000);
 };
 
+/**
+ * Normalize preview URL for local development
+ * Adds port :5173 for localhost URLs if not already present
+ */
+const normalizePreviewUrl = (url: string): string => {
+	try {
+		const urlObj = new URL(url);
+		// Check if it's localhost and doesn't have a port
+		if ((urlObj.hostname === 'localhost' || urlObj.hostname.includes('.localhost')) && !urlObj.port) {
+			// For local development, add port 5173
+			urlObj.port = '5173';
+			return urlObj.toString();
+		}
+		return url;
+	} catch {
+		// If URL parsing fails, return as-is
+		return url;
+	}
+};
+
 // ============================================================================
 // Main Component
 // ============================================================================
@@ -60,7 +80,9 @@ export const PreviewIframe = forwardRef<HTMLIFrameElement, PreviewIframeProps>(
 		 */
 		const testAvailability = useCallback(async (url: string): Promise<'sandbox' | 'dispatcher' | null> => {
 			try {
-				const response = await fetch(url, {
+				// Normalize URL for local development (add port if needed)
+				const normalizedUrl = normalizePreviewUrl(url);
+				const response = await fetch(normalizedUrl, {
 					method: 'HEAD',
 					mode: 'cors', // Using CORS to read security-validated headers
 					cache: 'no-cache',
@@ -149,6 +171,8 @@ export const PreviewIframe = forwardRef<HTMLIFrameElement, PreviewIframeProps>(
 		 * Attempt to load the preview with retry logic
 		 */
 		const loadWithRetry = useCallback(async (url: string, attempt: number) => {
+			// Normalize URL for local development (add port if needed)
+			const normalizedUrl = normalizePreviewUrl(url);
 			// Clear any pending retry
 			if (retryTimeoutRef.current) {
 				clearTimeout(retryTimeoutRef.current);
@@ -180,7 +204,7 @@ export const PreviewIframe = forwardRef<HTMLIFrameElement, PreviewIframeProps>(
 			});
 
 			// Test availability
-			const previewType = await testAvailability(url);
+			const previewType = await testAvailability(normalizedUrl);
 
 			if (previewType) {
 				// Success: put component into postload state, keep loading UI visible
@@ -188,7 +212,7 @@ export const PreviewIframe = forwardRef<HTMLIFrameElement, PreviewIframeProps>(
 				setLoadState({
 					status: 'postload',
 					attempt: attempt + 1,
-					loadedSrc: url,
+					loadedSrc: normalizedUrl,
 					errorMessage: null,
 					previewType,
 				});

@@ -40,12 +40,6 @@ const COMMON_AGENT_CONFIGS = {
     },
 } as const;
 
-const SHARED_IMPLEMENTATION_CONFIG = {
-    reasoning_effort: 'low' as const,
-    max_tokens: 48000,
-    temperature: 1,
-    fallbackModel: AIModels.GEMINI_2_5_PRO,
-};
 
 //======================================================================================
 // ATTENTION! Platform config requires specific API keys and Cloudflare AI Gateway setup.
@@ -58,10 +52,10 @@ Cloudflare AI Gateway unified billing for seamless model access without managing
 const PLATFORM_AGENT_CONFIG: AgentConfig = {
     ...COMMON_AGENT_CONFIGS,
     blueprint: {
-        name: AIModels.GEMINI_3_PRO_PREVIEW,
-        reasoning_effort: 'high',
-        max_tokens: 20000,
-        fallbackModel: AIModels.GEMINI_2_5_FLASH,
+        name: AIModels.GEMINI_2_5_FLASH, // Use cheaper model to avoid rate limits
+        reasoning_effort: undefined, // Remove reasoning effort to reduce token usage
+        max_tokens: 16000, // Reduce max tokens
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
         temperature: 1.0,
     },
     projectSetup: {
@@ -72,19 +66,23 @@ const PLATFORM_AGENT_CONFIG: AgentConfig = {
         fallbackModel: AIModels.GEMINI_2_5_PRO,
     },
     phaseGeneration: {
-        name: AIModels.GEMINI_3_FLASH_PREVIEW,
-        reasoning_effort: 'medium',
+        name: AIModels.GEMINI_2_5_FLASH, // Use cheaper model
+        reasoning_effort: 'medium', // Remove reasoning to reduce tokens
         max_tokens: 8000,
         temperature: 1,
-        fallbackModel: AIModels.OPENAI_5_MINI,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     firstPhaseImplementation: {
-        name: AIModels.GEMINI_3_FLASH_PREVIEW,
-        ...SHARED_IMPLEMENTATION_CONFIG,
+        name: AIModels.GEMINI_2_5_FLASH, // Use cheaper model
+        max_tokens: 48000,
+        temperature: 1,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     phaseImplementation: {
-        name: AIModels.GEMINI_3_FLASH_PREVIEW,
-        ...SHARED_IMPLEMENTATION_CONFIG,
+        name: AIModels.GEMINI_2_5_FLASH, // Use cheaper model
+        max_tokens: 48000,
+        temperature: 1,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     conversationalResponse: {
         name: AIModels.GROK_4_1_FAST,
@@ -124,58 +122,64 @@ const DEFAULT_AGENT_CONFIG: AgentConfig = {
     ...COMMON_AGENT_CONFIGS,
     templateSelection: {
         name: AIModels.GEMINI_2_5_FLASH_LITE,
-        max_tokens: 2000,
-        fallbackModel: AIModels.GEMINI_2_5_FLASH,
-        temperature: 0.6,
+        max_tokens: 1500,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
+        temperature: 0.5,
     },
     blueprint: {
-        name: AIModels.GEMINI_3_FLASH_PREVIEW,
-        reasoning_effort: 'high',
-        max_tokens: 64000,
-        fallbackModel: AIModels.GEMINI_2_5_PRO,
-        temperature: 1,
+        name: AIModels.GEMINI_2_5_FLASH_LITE,
+        reasoning_effort: 'low',
+        max_tokens: 8000,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
+        temperature: 0.8,
     },
     projectSetup: {
-        name: AIModels.GEMINI_3_FLASH_PREVIEW,
-        ...SHARED_IMPLEMENTATION_CONFIG,
+        name: AIModels.GEMINI_2_5_FLASH_LITE,
+        max_tokens: 16000,
+        temperature: 0.8,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     phaseGeneration: {
-        name: AIModels.GEMINI_3_FLASH_PREVIEW,
-        ...SHARED_IMPLEMENTATION_CONFIG,
+        name: AIModels.GEMINI_2_5_FLASH_LITE,
+        max_tokens: 6000,
+        temperature: 0.8,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     firstPhaseImplementation: {
-        name: AIModels.GEMINI_3_FLASH_PREVIEW,
-        ...SHARED_IMPLEMENTATION_CONFIG,
+        name: AIModels.GEMINI_2_5_FLASH_LITE,
+        max_tokens: 16000,
+        temperature: 0.8,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     phaseImplementation: {
-        name: AIModels.GEMINI_3_FLASH_PREVIEW,
-        ...SHARED_IMPLEMENTATION_CONFIG,
+        name: AIModels.GEMINI_2_5_FLASH_LITE,
+        max_tokens: 16000,
+        temperature: 0.8,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     conversationalResponse: {
-        name: AIModels.GEMINI_2_5_FLASH,
+        name: AIModels.GEMINI_2_5_FLASH_LITE,
         reasoning_effort: 'low',
-        max_tokens: 4000,
-        temperature: 0,
-        fallbackModel: AIModels.GEMINI_2_5_PRO,
+        max_tokens: 2500,
+        temperature: 0.3,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     deepDebugger: {
-        name: AIModels.GEMINI_3_FLASH_PREVIEW,
-        reasoning_effort: 'high',
-        max_tokens: 8000,
-        temperature: 1,
-        fallbackModel: AIModels.GEMINI_2_5_FLASH,
+        name: AIModels.GEMINI_2_5_FLASH_LITE,
+        max_tokens: 6000,
+        temperature: 0.8,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     fileRegeneration: {
-        name: AIModels.GEMINI_3_FLASH_PREVIEW,
-        reasoning_effort: 'low',
-        max_tokens: 32000,
-        temperature: 1,
-        fallbackModel: AIModels.GEMINI_2_5_FLASH,
+        name: AIModels.GEMINI_2_5_FLASH_LITE,
+        max_tokens: 8000,
+        temperature: 0.4,
+        fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     agenticProjectBuilder: {
         name: AIModels.GEMINI_3_FLASH_PREVIEW,
         reasoning_effort: 'high',
-        max_tokens: 8000,
+        max_tokens: 6000,
         temperature: 1,
         fallbackModel: AIModels.GEMINI_2_5_FLASH,
     },

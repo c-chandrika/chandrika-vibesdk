@@ -380,7 +380,9 @@ export default function AppView() {
 	};
 
 	const getAppUrl = () => {
-		return app?.cloudflareUrl || app?.previewUrl || '';
+		// Prefer preview URL (sandbox/tunnel) since that's guaranteed to be live for local dev,
+		// and in production previewUrl will fall back to cloudflareUrl from the backend.
+		return app?.previewUrl || app?.cloudflareUrl || '';
 	};
 
 	const handlePreviewDeploy = async () => {

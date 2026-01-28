@@ -75,9 +75,9 @@
         {
             "binding": "DB",
             "database_name": "vibesdk-db",
-            "database_id": "4f5fe4ac-cff6-4acb-8609-dfef09a506d2",
+            "database_id": "local",
             "migrations_dir": "migrations",
-            "remote": true
+            "remote": false
         }
     ],
 	"durable_objects": {
@@ -109,8 +109,8 @@
     ],
     "kv_namespaces": [
         {
-            "binding": "KV",
-            "id": "2dd63708738d443e946a28f39cf86917",
+            "binding": "VibecoderStore",
+            "id": "7bfa6410487b4085adf273e01152b22e",
             "remote": true
         }
     ],
@@ -158,20 +158,20 @@
             },
             "version": "1.0.0"
         },
-        "CUSTOM_DOMAIN": "vibesdk-nxtwave.tech",
+        "CUSTOM_DOMAIN": "http://localhost:5173",
         "MAX_SANDBOX_INSTANCES": "10",
         "SANDBOX_INSTANCE_TYPE": "standard-3"
     },
 	"workers_dev": true,
     "preview_urls": true,
-    "routes": [
-        {
-            "pattern": "vibesdk-nxtwave.tech",
-            "custom_domain": true
-        },
-        {
-            "pattern": "*vibesdk-nxtwave.tech/*",
-            "custom_domain": false
-        }
-    ]
+    // "routes": [
+    //     {
+    //         "pattern": "vibesdk-nxtwave.tech",
+    //         "custom_domain": true
+    //     },
+    //     {
+    //         "pattern": "*vibesdk-nxtwave.tech/*",
+    //         "custom_domain": false
+    //     }
+    // ]
 }

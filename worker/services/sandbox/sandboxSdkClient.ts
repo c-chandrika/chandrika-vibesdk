@@ -963,6 +963,12 @@ export class SandboxSdkClient extends BaseSandboxService {
                         }
                     }
 
+                    // Normalize protocol for localhost (should be http:// not https://)
+                    const previewDomain = getPreviewDomain(env);
+                    if (previewDomain && (previewDomain.includes('localhost') || previewDomain.includes('127.0.0.1'))) {
+                        previewURL = previewURL.replace(/^https:\/\//, 'http://');
+                    }
+
                     if(env.USE_TUNNEL_FOR_PREVIEW) {
                         this.logger.info('Using tunnel url instead for preview as configured', { instanceId, tunnelURL });
                         previewURL = tunnelURL;
@@ -1909,8 +1915,20 @@ export class SandboxSdkClient extends BaseSandboxService {
             }
             
             // Step 8: Determine deployment URL
-            const deployedUrl = `${this.getProtocolForHost()}://${projectName}.${getPreviewDomain(env)}`;
+            let deployedUrl = `${this.getProtocolForHost()}://${projectName}.${getPreviewDomain(env)}`;
             const deploymentId = projectName;
+
+            // In local/dev or when using tunnels for preview, prefer the tunnel URL as the live URL.
+            // This ensures the "Live URL" shown in the UI is actually reachable (trycloudflare)
+            // instead of a *.localhost hostname that may not be routed in local environments.
+            const previewDomain = getPreviewDomain(env);
+            if ((env.USE_TUNNEL_FOR_PREVIEW || previewDomain.includes('localhost')) && metadata?.tunnelURL) {
+                this.logger.info('Overriding deployedUrl with tunnelURL for local/dev environment', {
+                    previousDeployedUrl: deployedUrl,
+                    tunnelURL: metadata.tunnelURL,
+                });
+                deployedUrl = metadata.tunnelURL;
+            }
             
             this.logger.info('Deployment successful', { 
                 instanceId,

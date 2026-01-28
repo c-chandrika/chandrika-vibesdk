@@ -121,7 +121,7 @@ export async function executeInference<T extends z.AnyZodObject>(   {
     messages,
     temperature,
     maxTokens,
-    retryLimit = 5,
+    retryLimit = 3,
     stream,
     tools,
     reasoning_effort,
@@ -149,6 +149,8 @@ export async function executeInference<T extends z.AnyZodObject>(   {
 
     // Exponential backoff for retries
     const backoffMs = (attempt: number) => Math.min(500 * Math.pow(2, attempt), 10000);
+    // Longer backoff for rate limit errors (60 seconds)
+    const rateLimitBackoffMs = 60000;
 
     let useCheaperModel = false;
 
@@ -197,7 +199,19 @@ export async function executeInference<T extends z.AnyZodObject>(   {
             // console.log(result);
             return result;
         } catch (error) {
-            if (error instanceof RateLimitExceededError || error instanceof SecurityError) {
+            if (error instanceof RateLimitExceededError) {
+                // For rate limit errors, wait longer before retrying (60 seconds)
+                const isLastAttempt = attempt === retryLimit - 1;
+                if (!isLastAttempt) {
+                    logger.warn(`Rate limit exceeded. Waiting ${rateLimitBackoffMs / 1000} seconds before retry...`);
+                    await new Promise(resolve => setTimeout(resolve, rateLimitBackoffMs));
+                    continue; // Retry with same model
+                } else {
+                    throw error; // Give up after max retries
+                }
+            }
+            
+            if (error instanceof SecurityError) {
                 throw error;
             }
             

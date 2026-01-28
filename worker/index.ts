@@ -103,7 +103,13 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
 	logger.info(`Sandbox miss for ${hostname}, attempting dispatch to permanent worker.`);
 	if (!isDispatcherAvailable(env)) {
 		logger.warn(`Dispatcher not available, cannot serve: ${hostname}`);
-		return new Response('This application is not currently available.', { status: 404 });
+		return new Response('This application is not currently available. The sandbox instance may not be running or the app has not been deployed yet.', { 
+			status: 404,
+			headers: {
+				'Content-Type': 'text/plain',
+				'X-Preview-Type': 'not-found'
+			}
+		});
 	}
 
 	// Extract the app name (e.g., "xyz" from "xyz.build.cloudflare.dev").
@@ -131,7 +137,24 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
 		// This block catches errors if the binding doesn't exist or if worker.fetch() fails.
 		logger.warn(`Error dispatching to worker '${appName}': ${error.message}`);
 
-		return new Response('An error occurred while loading this application.', { status: 500 });
+		// Provide more helpful error message
+		let errorMessage: string;
+		if (error.message?.includes('not found') || error.message?.includes('does not exist')) {
+			errorMessage = `Application '${appName}' has not been deployed yet. Please deploy the app first.`;
+		} else if (hostname.includes('.localhost')) {
+			// For localhost preview URLs, the issue is likely that exposePort() format doesn't match routing
+			errorMessage = `Preview URL format not supported for local development. The sandbox instance may not be running, or the preview URL format from exposePort() doesn't match the expected routing pattern. If a tunnel URL is available, use that instead.`;
+		} else {
+			errorMessage = `An error occurred while loading this application: ${error.message || 'Unknown error'}`;
+		}
+
+		return new Response(errorMessage, { 
+			status: 500,
+			headers: {
+				'Content-Type': 'text/plain',
+				'X-Preview-Type': 'dispatcher-error'
+			}
+		});
 	}
 }
 

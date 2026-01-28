@@ -35,83 +35,91 @@ const MODELS_MASTER = {
     },
     // --- Google Models ---
     GEMINI_2_5_PRO: {
-        id: 'google-ai-studio/gemini-2.5-pro',
+        id: 'gemini-2.5-pro',
         config: {
             name: 'Gemini 2.5 Pro',
             size: ModelSize.LARGE,
             provider: 'google-ai-studio',
             creditCost: 5,   // $1.25
             contextSize: 1048576, // 1M Context
+            directOverride: true,
         }
     },
     GEMINI_2_5_FLASH: {
-        id: 'google-ai-studio/gemini-2.5-flash',
+        id: 'gemini-2.5-flash',
         config: {
             name: 'Gemini 2.5 Flash',
             size: ModelSize.REGULAR,
             provider: 'google-ai-studio',
             creditCost: 1.2, // $0.30
             contextSize: 1048576, // 1M Context
+            directOverride: true,
         }
     },
     GEMINI_2_5_FLASH_LITE: {
-        id: 'google-ai-studio/gemini-2.5-flash-lite',
+        id: 'gemini-2.5-flash-lite',
         config: {
             name: 'Gemini 2.5 Flash-Lite',
             size: ModelSize.LITE,
             provider: 'google-ai-studio',
             creditCost: 0.4, // $0.10
             contextSize: 1048576, // 1M Context
+            directOverride: true,
         }
     },
     GEMINI_2_5_FLASH_LATEST: {
-        id: 'google-ai-studio/gemini-2.5-flash-latest',
+        id: 'gemini-flash-latest',
         config: {
             name: 'Gemini 2.5 Flash (Latest)',
             size: ModelSize.REGULAR,
             provider: 'google-ai-studio',
             creditCost: 1.2, // $0.30
             contextSize: 1048576,
+            directOverride: true,
         }
     },
     GEMINI_2_5_FLASH_LITE_LATEST: {
-        id: 'google-ai-studio/gemini-2.5-flash-lite-latest',
+        id: 'gemini-flash-lite-latest',
         config: {
             name: 'Gemini 2.5 Flash-Lite (Latest)',
             size: ModelSize.LITE,
             provider: 'google-ai-studio',
             creditCost: 0.4, // $0.10
             contextSize: 1048576,
+            directOverride: true,
         }
     },
     GEMINI_2_5_PRO_LATEST: {
-        id: 'google-ai-studio/gemini-2.5-pro-latest',
+        id: 'gemini-pro-latest',
         config: {
             name: 'Gemini 2.5 Pro (Latest)',
             size: ModelSize.LARGE,
             provider: 'google-ai-studio',
             creditCost: 5, // $1.25
             contextSize: 1048576,
+            directOverride: true,
         }
     },
     GEMINI_3_PRO_PREVIEW: {
-        id: 'google-ai-studio/gemini-3-pro-preview',
+        id: 'gemini-2.5-pro',
         config: {
-            name: 'Gemini 3.0 Pro Preview',
+            name: 'Gemini 2.5 Pro (using 2.5 as 3.0 not yet available)',
             size: ModelSize.LARGE,
             provider: 'google-ai-studio',
             creditCost: 8, // $2.00 (Preview Pricing)
             contextSize: 1048576,
+            directOverride: true,
         }
     },
     GEMINI_3_FLASH_PREVIEW: {
-        id: 'google-ai-studio/gemini-3-flash-preview',
+        id: 'gemini-2.0-flash-exp',
         config: {
-            name: 'Gemini 3.0 Flash Preview',
+            name: 'Gemini 2.0 Flash Experimental (using as 3.0 not yet available)',
             size: ModelSize.REGULAR,
             provider: 'google-ai-studio',
             creditCost: 2, // $0.5
             contextSize: 1048576, // 1M Context
+            directOverride: true,
         }
     },
 

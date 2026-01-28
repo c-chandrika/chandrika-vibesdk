@@ -6,8 +6,12 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function getPreviewUrl(previewURL?: string, tunnelURL?: string): string {
-    // return import.meta.env.VITE_PREVIEW_MODE === 'tunnel' ? tunnelURL || previewURL || '' : previewURL || tunnelURL || '';
-    return previewURL || tunnelURL || '';
+    // Prefer tunnel URL if available (especially for local dev with USE_TUNNEL_FOR_PREVIEW=true)
+    // Tunnel URLs work reliably, while previewURL from exposePort() may not match routing patterns
+    if (tunnelURL) {
+        return tunnelURL;
+    }
+    return previewURL || '';
 }
 
 export function capitalizeFirstLetter(str: string) {

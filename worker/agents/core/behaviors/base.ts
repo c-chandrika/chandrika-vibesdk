@@ -40,7 +40,6 @@ import { DeepDebuggerOperation } from '../../operations/DeepDebugger';
 import type { DeepDebuggerInputs } from '../../operations/DeepDebugger';
 import { generatePortToken } from 'worker/utils/cryptoUtils';
 import { getPreviewDomain, getProtocolForHost } from 'worker/utils/urls';
-import { isDev } from 'worker/utils/envs';
 
 // Screenshot capture configuration
 const SCREENSHOT_CONFIG = {
@@ -1075,7 +1074,8 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
     public getBrowserPreviewURL(): string {
         const token = this.getOrCreateFileServingToken();
         const agentId = this.getAgentId();
-        const previewDomain = isDev(this.env) ? 'localhost:5173' : getPreviewDomain(this.env);
+        // Use getPreviewDomain which handles local dev correctly
+        const previewDomain = getPreviewDomain(this.env);
 
         // Format: b-{agentid}-{token}.{previewDomain}
         return `${getProtocolForHost(previewDomain)}://b-${agentId}-${token}.${previewDomain}`;
