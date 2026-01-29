@@ -982,13 +982,23 @@ export class SandboxSdkClient extends BaseSandboxService {
                     return undefined;
                 }
             } else {
-                this.logger.warn('Failed to install dependencies', installResult.stderr);
+                this.logger.error('Failed to install dependencies', { 
+                    exitCode: installResult.exitCode,
+                    stderr: installResult.stderr,
+                    stdout: installResult.stdout,
+                    instanceId
+                });
+                throw new Error(`Dependency installation failed: ${installResult.stderr || 'Unknown error'}`);
             }
         } catch (error) {
-            this.logger.warn('Failed to setup instance', error);
+            this.logger.error('Failed to setup instance', { 
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+                instanceId,
+                projectName
+            });
+            throw error; // Re-throw to provide better error context
         }
-        
-        return undefined;
     }
     
     async createInstance(
