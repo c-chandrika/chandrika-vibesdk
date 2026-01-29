@@ -185,8 +185,10 @@ const worker = {
 		// --- Domain-based Routing ---
 
 		// Normalize hostnames for both local development (localhost) and production.
+		// Remove protocol from CUSTOM_DOMAIN if present for comparison
+		const customDomain = env.CUSTOM_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '');
 		const isMainDomainRequest =
-			hostname === env.CUSTOM_DOMAIN || hostname === 'localhost';
+			hostname === customDomain || hostname === 'localhost';
 		const isSubdomainRequest =
 			hostname.endsWith(`.${previewDomain}`) ||
 			(hostname.endsWith('.localhost') && hostname !== 'localhost');

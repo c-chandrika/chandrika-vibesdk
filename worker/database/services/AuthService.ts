@@ -263,13 +263,24 @@ export class AuthService extends BaseService {
     }
 
     async getOauthProvider(provider: OAuthProvider, request: Request): Promise<BaseOAuthProvider> {
-        const url = new URL(request.url).origin;
+        // Use CUSTOM_DOMAIN if configured, otherwise use request origin
+        // This ensures OAuth redirect URIs work correctly for worker dev URLs
+        let baseUrl: string;
+        if (this.env.CUSTOM_DOMAIN) {
+            // Remove protocol if present and construct proper URL
+            const domain = this.env.CUSTOM_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '');
+            // Use https for workers.dev and custom domains, http only for localhost
+            const protocol = (domain.includes('localhost') || domain.includes('127.0.0.1')) ? 'http' : 'https';
+            baseUrl = `${protocol}://${domain}`;
+        } else {
+            baseUrl = new URL(request.url).origin;
+        }
         
         switch (provider) {
             case 'google':
-                return GoogleOAuthProvider.create(this.env, url);
+                return GoogleOAuthProvider.create(this.env, baseUrl);
             case 'github':
-                return GitHubOAuthProvider.create(this.env, url);
+                return GitHubOAuthProvider.create(this.env, baseUrl);
             default:
                 throw new SecurityError(
                     SecurityErrorType.INVALID_INPUT,

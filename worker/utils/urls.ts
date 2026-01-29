@@ -63,7 +63,8 @@ export function migratePreviewUrl(storedUrl: string | undefined, env: Env): stri
 }
 
 export function buildGitCloneUrl(env: Env, appId: string, token?: string): string {
-    const domain = env.CUSTOM_DOMAIN;
+    // Remove protocol if present (domain only)
+    const domain = env.CUSTOM_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '');
     const protocol = getProtocolForHost(domain);
     // Git expects username:password format. Use 'oauth2' as username and token as password
     // This is a standard pattern for token-based git authentication

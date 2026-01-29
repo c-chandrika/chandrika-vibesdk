@@ -42,9 +42,16 @@ export function getConfigurableSecurityDefaults(): ConfigurableSecuritySettings 
 export function getAllowedOrigins(env: Env): string[] {
     const origins: string[] = [];
     
-    // Production domains
+    // Production domains - handle both custom domains and workers.dev
     if (env.CUSTOM_DOMAIN) {
-        origins.push(`https://${env.CUSTOM_DOMAIN}`);
+        // Remove protocol if present
+        const domain = env.CUSTOM_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        // Always use https for workers.dev and custom domains (not localhost)
+        if (domain.includes('localhost') || domain.includes('127.0.0.1')) {
+            origins.push(`http://${domain}`);
+        } else {
+            origins.push(`https://${domain}`);
+        }
     }
     
     // Development origins (only in development)
