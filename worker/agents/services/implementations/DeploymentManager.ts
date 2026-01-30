@@ -410,9 +410,15 @@ export class DeploymentManager extends BaseAgentService<BaseProjectState> implem
                 return preview;
                 
             } catch (error) {
-                logger.warn(`Deployment attempt ${attempt} failed:`, error);
-                
                 const errorMsg = error instanceof Error ? error.message : String(error);
+                const errorStack = error instanceof Error ? error.stack : undefined;
+                
+                logger.error(`Deployment attempt ${attempt} failed:`, {
+                    error: errorMsg,
+                    stack: errorStack,
+                    attempt,
+                    sessionId: this.getSessionId()
+                });
 
                 // Handle specific errors that require session reset
                 if (errorMsg.includes('Network connection lost') || 
@@ -434,8 +440,13 @@ export class DeploymentManager extends BaseAgentService<BaseProjectState> implem
                     sandboxInstanceId: undefined
                 });
 
+                // Include more context in error message
+                const detailedError = errorStack 
+                    ? `${errorMsg}\n\nStack trace: ${errorStack.split('\n').slice(0, 5).join('\n')}`
+                    : errorMsg;
+
                 callbacks?.onError?.({
-                    error: `Deployment attempt ${attempt} failed: ${errorMsg}`
+                    error: `Deployment attempt ${attempt} failed: ${detailedError}`
                 });
                 
                 // Exponential backoff before retry (capped at 30 seconds)

@@ -903,12 +903,23 @@ export class SandboxSdkClient extends BaseSandboxService {
         try {
             const sandbox = this.getSandbox();
             // Update project configuration with the specified project name
-            await this.updateProjectConfiguration(instanceId, projectName);
+            try {
+                await this.updateProjectConfiguration(instanceId, projectName);
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                throw new Error(`Failed to update project configuration: ${errorMessage}`);
+            }
             
             // Provision Cloudflare resources if template has placeholders
-            const resourceProvisioningResult = await this.provisionTemplateResources(instanceId, projectName);
-            if (!resourceProvisioningResult.success && resourceProvisioningResult.failed.length > 0) {
-                this.logger.warn(`Some resources failed to provision for ${instanceId}, but continuing setup process`);
+            try {
+                const resourceProvisioningResult = await this.provisionTemplateResources(instanceId, projectName);
+                if (!resourceProvisioningResult.success && resourceProvisioningResult.failed.length > 0) {
+                    this.logger.warn(`Some resources failed to provision for ${instanceId}, but continuing setup process`);
+                }
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                this.logger.warn(`Resource provisioning failed for ${instanceId}, but continuing: ${errorMessage}`);
+                // Non-blocking - continue with setup
             }
             
             // Store wrangler.jsonc configuration in KV after resource provisioning
@@ -928,19 +939,48 @@ export class SandboxSdkClient extends BaseSandboxService {
             // If on local development, start cloudflared tunnel
             let tunnelUrlPromise = Promise.resolve('');
             // Allocate single port for both dev server and tunnel
-            const allocatedPort = await this.allocateAvailablePort();
-
-            if (isDev(env) || env.USE_TUNNEL_FOR_PREVIEW) {
-                this.logger.info('Starting cloudflared tunnel for local development', { instanceId });
-                tunnelUrlPromise = this.startCloudflaredTunnel(instanceId, allocatedPort);
+            let allocatedPort: number;
+            try {
+                allocatedPort = await this.allocateAvailablePort();
+                this.logger.info('Port allocated', { instanceId, allocatedPort });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                throw new Error(`Failed to allocate port: ${errorMessage}`);
             }
 
-            this.logger.info('Installing dependencies', { instanceId });
-            const [installResult, tunnelURL] = await Promise.all([
-                this.executeCommand(instanceId, `bun install`, { timeout: 40000 }),
-                tunnelUrlPromise
-            ]);
-            this.logger.info('Dependencies installed', { instanceId, tunnelURL });
+            if (isDev(env) || env.USE_TUNNEL_FOR_PREVIEW) {
+                this.logger.info('Starting cloudflared tunnel', { instanceId, isDev: isDev(env), useTunnel: env.USE_TUNNEL_FOR_PREVIEW });
+                try {
+                    tunnelUrlPromise = this.startCloudflaredTunnel(instanceId, allocatedPort);
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    this.logger.warn(`Failed to start cloudflared tunnel, continuing without tunnel: ${errorMessage}`);
+                    tunnelUrlPromise = Promise.resolve('');
+                }
+            }
+
+            this.logger.info('Installing dependencies', { instanceId, timeout: 40000 });
+            let installResult, tunnelURL;
+            try {
+                [installResult, tunnelURL] = await Promise.all([
+                    this.executeCommand(instanceId, `bun install`, { timeout: 40000 }),
+                    tunnelUrlPromise
+                ]);
+                this.logger.info('Dependencies installed', { 
+                    instanceId, 
+                    tunnelURL: tunnelURL || 'no tunnel',
+                    exitCode: installResult.exitCode,
+                    hasStderr: !!installResult.stderr,
+                    hasStdout: !!installResult.stdout
+                });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                this.logger.error('Failed during dependency installation or tunnel setup', {
+                    error: errorMessage,
+                    instanceId
+                });
+                throw new Error(`Failed during dependency installation: ${errorMessage}`);
+            }
                 
             if (installResult.exitCode === 0) {
                 // Try to start development server in background
@@ -949,12 +989,34 @@ export class SandboxSdkClient extends BaseSandboxService {
                         await this.setLocalEnvVars(instanceId, localEnvVars);
                     }
                     // Start dev server on allocated port
-                    const processId = await this.startDevServer(instanceId, initCommand, allocatedPort);
+                    this.logger.info('Starting dev server', { instanceId, initCommand, allocatedPort });
+                    let processId: string;
+                    try {
+                        processId = await this.startDevServer(instanceId, initCommand, allocatedPort);
+                        this.logger.info('Dev server started successfully', { instanceId, processId, port: allocatedPort });
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        this.logger.error('Failed to start dev server in setupInstance', {
+                            error: errorMessage,
+                            instanceId,
+                            initCommand,
+                            allocatedPort
+                        });
+                        throw error; // Re-throw to be caught by outer catch
+                    }
                     this.logger.info('Instance created successfully', { instanceId, processId, port: allocatedPort });
                         
                     // Expose the same port for preview URL
-                    const previewResult = await sandbox.exposePort(allocatedPort, { hostname: getPreviewDomain(env) });
-                    let previewURL = previewResult.url;
+                    let previewURL: string;
+                    try {
+                        const previewDomain = getPreviewDomain(env);
+                        this.logger.info('Exposing port for preview', { instanceId, allocatedPort, previewDomain });
+                        const previewResult = await sandbox.exposePort(allocatedPort, { hostname: previewDomain });
+                        previewURL = previewResult.url;
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        throw new Error(`Failed to expose port for preview: ${errorMessage}`);
+                    }
                     if (!isDev(env)) {
                         const previewDomain = getPreviewDomain(env);
                         if (previewDomain) {
@@ -978,8 +1040,14 @@ export class SandboxSdkClient extends BaseSandboxService {
                         
                     return { previewURL, tunnelURL, processId, allocatedPort };
                 } catch (error) {
-                    this.logger.warn('Failed to start dev server', error);
-                    return undefined;
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    this.logger.error('Failed to start dev server', { 
+                        error: errorMessage,
+                        stack: error instanceof Error ? error.stack : undefined,
+                        instanceId,
+                        allocatedPort
+                    });
+                    throw new Error(`Failed to start dev server: ${errorMessage}`);
                 }
             } else {
                 this.logger.error('Failed to install dependencies', { 
@@ -1062,11 +1130,31 @@ export class SandboxSdkClient extends BaseSandboxService {
                 };
             }
             
-            const results = await this.setupInstance(instanceId, projectName, initCommand, envVars);
+            this.logger.info('About to call setupInstance', { instanceId, projectName, initCommand, hasEnvVars: !!envVars });
+            let results;
+            try {
+                results = await this.setupInstance(instanceId, projectName, initCommand, envVars);
+                this.logger.info('setupInstance completed successfully', { instanceId, hasResults: !!results });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                const errorStack = error instanceof Error ? error.stack : undefined;
+                this.logger.error('setupInstance threw an error', { 
+                    error: errorMessage,
+                    stack: errorStack,
+                    instanceId,
+                    projectName,
+                    initCommand
+                });
+                return {
+                    success: false,
+                    error: `Failed to setup instance: ${errorMessage}${errorStack ? `\nStack: ${errorStack.split('\n').slice(0, 3).join('\n')}` : ''}`
+                };
+            }
+            
             if (!results) {
                 return {
                     success: false,
-                    error: 'Failed to setup instance'
+                    error: 'Failed to setup instance: setupInstance returned undefined'
                 };
             }
             // Store instance metadata
