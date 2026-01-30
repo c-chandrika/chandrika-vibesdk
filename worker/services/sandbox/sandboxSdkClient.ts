@@ -936,8 +936,6 @@ export class SandboxSdkClient extends BaseSandboxService {
                 this.logger.warn('Failed to store wrangler config in KV', { instanceId, error: error instanceof Error ? error.message : 'Unknown error' });
                 // Non-blocking - continue with setup
             }
-            // If on local development, start cloudflared tunnel
-            let tunnelUrlPromise = Promise.resolve('');
             // Allocate single port for both dev server and tunnel
             let allocatedPort: number;
             try {
@@ -948,8 +946,22 @@ export class SandboxSdkClient extends BaseSandboxService {
                 throw new Error(`Failed to allocate port: ${errorMessage}`);
             }
 
-            if (isDev(env) || env.USE_TUNNEL_FOR_PREVIEW) {
-                this.logger.info('Starting cloudflared tunnel', { instanceId, isDev: isDev(env), useTunnel: env.USE_TUNNEL_FOR_PREVIEW });
+            // Determine if we need a tunnel
+            // Always use tunnel for .workers.dev domains (they don't support wildcard subdomains)
+            const previewDomain = getPreviewDomain(env);
+            const isWorkersDevDomain = previewDomain.includes('.workers.dev');
+            const needsTunnel = isDev(env) || env.USE_TUNNEL_FOR_PREVIEW || isWorkersDevDomain;
+            
+            // Start cloudflared tunnel if needed
+            let tunnelUrlPromise = Promise.resolve('');
+            if (needsTunnel) {
+                this.logger.info('Starting cloudflared tunnel', { 
+                    instanceId, 
+                    isDev: isDev(env), 
+                    useTunnel: env.USE_TUNNEL_FOR_PREVIEW,
+                    isWorkersDevDomain,
+                    previewDomain
+                });
                 try {
                     tunnelUrlPromise = this.startCloudflaredTunnel(instanceId, allocatedPort);
                 } catch (error) {
@@ -1007,15 +1019,49 @@ export class SandboxSdkClient extends BaseSandboxService {
                     this.logger.info('Instance created successfully', { instanceId, processId, port: allocatedPort });
                         
                     // Expose the same port for preview URL
+                    // Note: .workers.dev domains don't support wildcard subdomains, so we must use tunnels
+                    const isWorkersDevDomain = previewDomain.includes('.workers.dev');
+                    const shouldUseTunnel = env.USE_TUNNEL_FOR_PREVIEW || isWorkersDevDomain;
+                    
                     let previewURL: string;
-                    try {
-                        const previewDomain = getPreviewDomain(env);
-                        this.logger.info('Exposing port for preview', { instanceId, allocatedPort, previewDomain });
-                        const previewResult = await sandbox.exposePort(allocatedPort, { hostname: previewDomain });
-                        previewURL = previewResult.url;
-                    } catch (error) {
-                        const errorMessage = error instanceof Error ? error.message : String(error);
-                        throw new Error(`Failed to expose port for preview: ${errorMessage}`);
+                    
+                    // For .workers.dev domains, we MUST use tunnel (port exposure will fail)
+                    if (isWorkersDevDomain) {
+                        if (!tunnelURL || tunnelURL.trim() === '') {
+                            throw new Error(`Tunnel URL is required for .workers.dev domains but tunnel was not created. Please set USE_TUNNEL_FOR_PREVIEW=true or ensure ENVIRONMENT=dev`);
+                        }
+                        this.logger.info('Using tunnel URL for .workers.dev domain (port exposure not supported)', { 
+                            instanceId, 
+                            tunnelURL
+                        });
+                        previewURL = tunnelURL;
+                    } else if (shouldUseTunnel && tunnelURL) {
+                        // Use tunnel URL if configured
+                        this.logger.info('Using tunnel URL (USE_TUNNEL_FOR_PREVIEW enabled)', { 
+                            instanceId, 
+                            tunnelURL
+                        });
+                        previewURL = tunnelURL;
+                    } else {
+                        // Try to expose port for custom domains
+                        try {
+                            this.logger.info('Exposing port for preview', { instanceId, allocatedPort, previewDomain });
+                            const previewResult = await sandbox.exposePort(allocatedPort, { hostname: previewDomain });
+                            previewURL = previewResult.url;
+                        } catch (error) {
+                            const errorMessage = error instanceof Error ? error.message : String(error);
+                            // If port exposure fails and we have a tunnel, fall back to tunnel
+                            if (tunnelURL) {
+                                this.logger.warn('Port exposure failed, falling back to tunnel URL', {
+                                    error: errorMessage,
+                                    instanceId,
+                                    tunnelURL
+                                });
+                                previewURL = tunnelURL;
+                            } else {
+                                throw new Error(`Failed to expose port for preview: ${errorMessage}`);
+                            }
+                        }
                     }
                     if (!isDev(env)) {
                         const previewDomain = getPreviewDomain(env);
@@ -1026,14 +1072,8 @@ export class SandboxSdkClient extends BaseSandboxService {
                     }
 
                     // Normalize protocol for localhost (should be http:// not https://)
-                    const previewDomain = getPreviewDomain(env);
                     if (previewDomain && (previewDomain.includes('localhost') || previewDomain.includes('127.0.0.1'))) {
                         previewURL = previewURL.replace(/^https:\/\//, 'http://');
-                    }
-
-                    if(env.USE_TUNNEL_FOR_PREVIEW) {
-                        this.logger.info('Using tunnel url instead for preview as configured', { instanceId, tunnelURL });
-                        previewURL = tunnelURL;
                     }
                         
                     this.logger.info('Preview URL exposed', { instanceId, previewURL });
