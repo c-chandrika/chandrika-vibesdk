@@ -82,6 +82,16 @@ export const PreviewIframe = forwardRef<HTMLIFrameElement, PreviewIframeProps>(
 			try {
 				// Normalize URL for local development (add port if needed)
 				const normalizedUrl = normalizePreviewUrl(url);
+				
+				// Check if this is a trycloudflare.com URL (cloudflared tunnel)
+				// These URLs don't support CORS headers, so we skip the availability test
+				// and assume they're available (tunnels are created when the instance is ready)
+				const isTunnelUrl = normalizedUrl.includes('trycloudflare.com');
+				if (isTunnelUrl) {
+					console.log('Preview URL is a tunnel (trycloudflare.com), skipping CORS check');
+					return 'sandbox'; // Assume sandbox for tunnel URLs
+				}
+				
 				const response = await fetch(normalizedUrl, {
 					method: 'HEAD',
 					mode: 'cors', // Using CORS to read security-validated headers
@@ -112,6 +122,12 @@ export const PreviewIframe = forwardRef<HTMLIFrameElement, PreviewIframeProps>(
 				console.log('Preview available (type unknown, assuming sandbox)');
 				return 'sandbox';
 			} catch (error) {
+				// For trycloudflare URLs, CORS errors are expected - assume available
+				const isTunnelUrl = url.includes('trycloudflare.com');
+				if (isTunnelUrl && error instanceof TypeError && error.message.includes('CORS')) {
+					console.log('CORS error for tunnel URL (expected), assuming available');
+					return 'sandbox';
+				}
 				console.log('Preview not available yet:', error);
 				return null;
 			}

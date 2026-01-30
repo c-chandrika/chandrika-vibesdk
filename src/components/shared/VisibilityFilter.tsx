@@ -1,5 +1,5 @@
 import React from 'react';
-import { Globe, Lock, Sparkles } from 'lucide-react';
+import { Globe, Lock, Sparkle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
@@ -13,7 +13,7 @@ const visibilityOptions = [
   { 
     value: 'all', 
     label: 'All', 
-    icon: Sparkles,
+    icon: Sparkle,
     color: 'from-violet-500/20 to-purple-500/20',
     activeColor: 'from-violet-500/10 to-purple-500/10'
   },

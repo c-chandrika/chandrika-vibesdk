@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const THINKING_PHRASES = [
@@ -70,7 +70,7 @@ export function ThinkingIndicator({ visible }: ThinkingIndicatorProps) {
               scale: { duration: 2, repeat: Infinity, ease: "easeInOut" }
             }}
           >
-            <Sparkles className="size-3 text-orange-400" />
+            <Sparkle className="size-3 text-orange-400" />
           </motion.div>
           <AnimatePresence mode="wait">
             <motion.span
