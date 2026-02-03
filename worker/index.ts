@@ -44,8 +44,8 @@ function setOriginControl(env: Env, request: Request, currentHeaders: Headers): 
  */
 async function handleUserAppRequest(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url);
-	const { hostname } = url;
-	logger.info(`Handling user app request for: ${hostname}`);
+	const { hostname, pathname } = url;
+	logger.info(`Handling user app request for: ${hostname}${pathname}`);
 
 	// Check if this is an agent browser file serving request
 	// Pattern: b-{agentid}-{token}.{previewDomain}
@@ -69,11 +69,15 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
 		}
 	}
 
+	// For API routes on preview subdomains, try sandbox first, but if it fails with 500,
+	// the backend in the sandbox might not be running or the route might not exist.
+	// We'll let the sandbox handle it and return the error, as the app's backend should be in the sandbox.
+	
 	// 1. Attempt to proxy to a live development sandbox.
 	// proxyToSandbox doesn't consume the request body on a miss, so no clone is needed here.
 	const sandboxResponse = await proxyToSandbox(request, env);
 	if (sandboxResponse) {
-		logger.info(`Serving response from sandbox for: ${hostname}`);
+		logger.info(`Serving response from sandbox for: ${hostname}${pathname}, status: ${sandboxResponse.status}`);
         // If it was a websocket upgrade, we need to return the response as is
         if (sandboxResponse.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
             logger.info(`Serving websocket response from sandbox for: ${hostname}`);
@@ -85,6 +89,18 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
 		
         if (sandboxResponse.status === 500) {
             headers.set('X-Preview-Type', 'sandbox-error');
+            // Log the error body for debugging
+            try {
+                const errorText = await sandboxResponse.clone().text();
+                logger.error(`Sandbox returned 500 for ${hostname}${pathname}: ${errorText.substring(0, 500)}`);
+                // If it's an API route and the error suggests the route doesn't exist,
+                // this likely means the backend isn't running in the sandbox
+                if (pathname.startsWith('/api/') && (errorText.includes('404') || errorText.includes('Not Found') || errorText.length === 0)) {
+                    logger.warn(`API route ${pathname} not found in sandbox. The generated app's backend may not be running. Generated apps with backend APIs need their backend worker to be running in the sandbox.`);
+                }
+            } catch (e) {
+                logger.error(`Sandbox returned 500 for ${hostname}${pathname}, but couldn't read error body: ${e instanceof Error ? e.message : String(e)}`);
+            }
         } else {
             headers.set('X-Preview-Type', 'sandbox');
         }

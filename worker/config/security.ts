@@ -64,6 +64,28 @@ export function getAllowedOrigins(env: Env): string[] {
         origins.push('http://127.0.0.1:8787');
     }
     
+    // Allow preview subdomain patterns and tunnel URLs
+    // This allows requests from preview URLs like:
+    // - port-sandboxId-token.domain (pattern URLs)
+    // - *.trycloudflare.com (tunnel URLs)
+    // - *.build-preview.cloudflare.dev (Cloudflare preview URLs)
+    origins.push('https://*.trycloudflare.com');
+    origins.push('http://*.trycloudflare.com');
+    origins.push('https://*.build-preview.cloudflare.dev');
+    origins.push('http://*.build-preview.cloudflare.dev');
+    
+    // Allow any subdomain of the main domain for preview URLs
+    if (env.CUSTOM_DOMAIN) {
+        const domain = env.CUSTOM_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        if (!domain.includes('localhost') && !domain.includes('127.0.0.1')) {
+            // Allow any subdomain pattern (for port-sandboxId-token.domain)
+            origins.push(`https://*.${domain}`);
+        } else {
+            // For localhost, allow subdomain patterns with http
+            origins.push(`http://*.${domain}`);
+        }
+    }
+    
     return origins;
 }
 
@@ -71,8 +93,35 @@ export function isOriginAllowed(env: Env, origin: string): boolean {
     const allowedOrigins = getAllowedOrigins(env);
     if (!origin) return false;
     
-    // Check against allowed origins
-    return allowedOrigins.includes(origin);
+    // Check exact match first
+    if (allowedOrigins.includes(origin)) {
+        return true;
+    }
+    
+    // Check wildcard patterns
+    for (const allowedOrigin of allowedOrigins) {
+        if (allowedOrigin.includes('*')) {
+            // Convert wildcard pattern to regex
+            // e.g., "https://*.trycloudflare.com" -> /^https:\/\/[^/]+\.trycloudflare\.com$/
+            const pattern = allowedOrigin
+                .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // Escape special regex chars
+                .replace(/\*/g, '[^/]+'); // Replace * with non-slash chars
+            const regex = new RegExp(`^${pattern}$`);
+            if (regex.test(origin)) {
+                return true;
+            }
+        }
+    }
+    
+    // Check if origin is a subdomain of the main domain
+    if (env.CUSTOM_DOMAIN) {
+        const domain = env.CUSTOM_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        if (origin.includes(`.${domain}`) || origin.endsWith(domain)) {
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 /**
@@ -81,7 +130,27 @@ export function isOriginAllowed(env: Env, origin: string): boolean {
  */
 export function getCORSConfig(env: Env): CORSConfig {
     return {
-        origin: getAllowedOrigins(env),
+        origin: (origin: string) => {
+            // Allow same-origin requests (no origin header means same-origin)
+            if (!origin) {
+                return origin;
+            }
+            
+            // Check if origin is allowed
+            if (isOriginAllowed(env, origin)) {
+                return origin;
+            }
+            
+            // For preview URLs (tunnel URLs and subdomain patterns), allow them
+            // This handles cases where the preview URL is making API calls to itself
+            if (origin.includes('trycloudflare.com') || 
+                origin.includes('build-preview.cloudflare.dev') ||
+                origin.match(/^\d{4,5}-[^.]+\.[^.]+\.[^.]+$/)) { // port-sandboxId-token pattern
+                return origin;
+            }
+            
+            return null;
+        },
         allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
         allowHeaders: [
             'Content-Type',
