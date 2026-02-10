@@ -71,7 +71,7 @@ export class AuthController extends BaseController {
             const result = await authService.register(validatedData, request);
             
             const response = AuthController.createSuccessResponse(
-                formatAuthResponse(result.user, result.sessionId, result.expiresAt)
+                formatAuthResponse(result.user, result.sessionId, result.expiresAt, result.accessToken)
             );
             
             setSecureAuthCookies(response, {
@@ -126,7 +126,7 @@ export class AuthController extends BaseController {
             const result = await authService.login(validatedData, request);
             
             const response = AuthController.createSuccessResponse(
-                formatAuthResponse(result.user, result.sessionId, result.expiresAt)
+                formatAuthResponse(result.user, result.sessionId, result.expiresAt, result.accessToken)
             );
             
             setSecureAuthCookies(response, {
@@ -656,7 +656,7 @@ export class AuthController extends BaseController {
             const result = await authService.verifyEmailWithOtp(email, otp, request);
             
             const response = AuthController.createSuccessResponse(
-                formatAuthResponse(result.user, result.sessionId, result.expiresAt)
+                formatAuthResponse(result.user, result.sessionId, result.expiresAt, result.accessToken)
             );
             
             setSecureAuthCookies(response, {

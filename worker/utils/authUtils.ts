@@ -250,6 +250,7 @@ export interface SessionResponse {
 	user: AuthUser;
     sessionId: string;
     expiresAt: Date | null;
+	accessToken?: string; // Optional for backward compatibility, but included for token-based auth
 }
 
 export function mapUserResponse(
@@ -279,8 +280,12 @@ export function formatAuthResponse(
 	user: AuthUser,
 	sessionId: string,
 	expiresAt: Date | null,
+	accessToken?: string,
 ): SessionResponse {
 	const response: SessionResponse = { user, sessionId, expiresAt };
+	if (accessToken) {
+		response.accessToken = accessToken;
+	}
     
 	return response;
 }
