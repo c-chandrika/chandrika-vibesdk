@@ -34,10 +34,25 @@ export function createApp(env: Env): Hono<AppEnv> {
     // CSRF protection using double-submit cookie pattern with proper GET handling
     app.use('*', async (c, next) => {
         const method = c.req.method.toUpperCase();
+        const pathname = new URL(c.req.url).pathname;
         
         // Skip for WebSocket upgrades
         const upgradeHeader = c.req.header('upgrade');
         if (upgradeHeader?.toLowerCase() === 'websocket') {
+            return next();
+        }
+        
+        // Exempt public authentication endpoints from CSRF (for token-based auth in iframes)
+        // These are entry points that don't require existing sessions
+        const csrfExemptPaths = [
+            '/api/auth/login',
+            '/api/auth/register',
+            '/api/auth/verify-email',
+            '/api/auth/resend-verification',
+            '/api/auth/exchange-api-key', // SDK token exchange
+        ];
+        
+        if (csrfExemptPaths.includes(pathname)) {
             return next();
         }
         
