@@ -54,6 +54,15 @@ export function getAllowedOrigins(env: Env): string[] {
         }
     }
     
+    // Additional allowed origins from environment variable (comma-separated)
+    // Format: "https://domain1.com,https://domain2.com,http://localhost:3000"
+    if (env.ALLOWED_ORIGINS) {
+        const additionalOrigins = env.ALLOWED_ORIGINS.split(',')
+            .map((origin: string) => origin.trim())
+            .filter((origin: string) => origin.length > 0);
+        origins.push(...additionalOrigins);
+    }
+    
     // Development origins (only in development)
     if (isDev(env)) {
         origins.push('http://localhost:3000');
@@ -222,11 +231,35 @@ interface SecureHeadersConfig {
 }
 
 /**
+ * Get allowed frame ancestors for iframe embedding
+ */
+function getAllowedFrameAncestors(env: Env): string[] {
+    const frameAncestors: string[] = ["'self'"];
+    
+    // Add allowed origins as frame ancestors for iframe embedding
+    const allowedOrigins = getAllowedOrigins(env);
+    for (const origin of allowedOrigins) {
+        // Skip wildcard patterns and localhost in production
+        if (!origin.includes('*') && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
+            frameAncestors.push(origin);
+        } else if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+            // Include localhost in development
+            if (isDev(env)) {
+                frameAncestors.push(origin);
+            }
+        }
+    }
+    
+    return frameAncestors;
+}
+
+/**
  * Secure Headers Configuration
  * Comprehensive security headers with CSP
  */
 export function getSecureHeadersConfig(env: Env): SecureHeadersConfig {
     const isDevelopment = isDev(env);
+    const allowedFrameAncestors = getAllowedFrameAncestors(env);
     
     return {
         // Content Security Policy - strict by default
@@ -265,14 +298,17 @@ export function getSecureHeadersConfig(env: Env): SecureHeadersConfig {
                 `wss://${env.CUSTOM_DOMAIN || '*'}`,
                 // API endpoints
                 "https://api.github.com",
-                "https://api.cloudflare.com"
+                "https://api.cloudflare.com",
+                // Allow connections from allowed origins
+                ...allowedFrameAncestors.filter(origin => !origin.startsWith("'"))
             ],
-            frameSrc: ["'none'"],
+            frameSrc: ["'self'", ...allowedFrameAncestors.filter(origin => !origin.startsWith("'"))],
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],
             workerSrc: ["'self'", "blob:"],
             formAction: ["'self'"],
-            frameAncestors: ["'none'"],
+            // Allow framing from allowed origins (for iframe embedding)
+            frameAncestors: allowedFrameAncestors.length > 1 ? allowedFrameAncestors : ["'self'"],
             baseUri: ["'self'"],
             manifestSrc: ["'self'"],
             upgradeInsecureRequests: !isDevelopment ? [] : undefined
@@ -283,8 +319,10 @@ export function getSecureHeadersConfig(env: Env): SecureHeadersConfig {
             ? undefined // Don't set in development
             : 'max-age=31536000; includeSubDomains; preload',
         
-        // X-Frame-Options - Prevent clickjacking
-        xFrameOptions: 'DENY',
+        // X-Frame-Options - Allow framing from allowed origins
+        // If we have allowed frame ancestors, use SAMEORIGIN or ALLOW-FROM (legacy)
+        // Otherwise use DENY for security
+        xFrameOptions: allowedFrameAncestors.length > 1 ? 'SAMEORIGIN' : 'DENY',
         
         // X-Content-Type-Options - Prevent MIME sniffing
         xContentTypeOptions: 'nosniff',
@@ -295,10 +333,11 @@ export function getSecureHeadersConfig(env: Env): SecureHeadersConfig {
         // Referrer Policy - Privacy-focused
         referrerPolicy: 'strict-origin-when-cross-origin',
         
-        // Cross-Origin policies
-        crossOriginEmbedderPolicy: 'require-corp',
-        crossOriginResourcePolicy: 'same-origin',
-        crossOriginOpenerPolicy: 'same-origin',
+        // Cross-Origin policies - Relaxed for iframe contexts
+        // When embedding in iframes, we need to allow cross-origin resources
+        crossOriginEmbedderPolicy: false, // Disable COEP for iframe compatibility
+        crossOriginResourcePolicy: 'cross-origin', // Allow cross-origin resources
+        crossOriginOpenerPolicy: 'same-origin-allow-popups', // Relaxed for iframe communication
         
         // Origin Agent Cluster
         originAgentCluster: '?1',
