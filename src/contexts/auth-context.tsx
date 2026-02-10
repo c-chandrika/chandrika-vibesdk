@@ -5,7 +5,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { apiClient, ApiError } from '@/lib/api-client';
+import { apiClient, ApiError, setBearerToken } from '@/lib/api-client';
 import { useSentryUser } from '@/hooks/useSentryUser';
 import type { AuthSession, AuthUser } from '../api-types';
 
@@ -211,7 +211,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.success && response.data) {
         setUser({ ...response.data.user, isAnonymous: false } as AuthUser);
-        setToken(null); // Using cookies for authentication
+        
+        // Store accessToken if provided (for token-based auth, e.g., in iframes)
+        // Otherwise fall back to cookie-based auth
+        const accessToken = (response.data as { accessToken?: string }).accessToken;
+        if (accessToken) {
+          setToken(accessToken);
+          setBearerToken(accessToken); // Store in API client for Bearer token auth
+        } else {
+          setToken(null); // Using cookies for authentication
+        }
+        
         setSession({
           userId: response.data.user.id,
           email: response.data.user.email,
@@ -249,7 +259,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.success && response.data) {
         setUser({ ...response.data.user, isAnonymous: false } as AuthUser);
-        setToken(null); // Using cookies for authentication
+        
+        // Store accessToken if provided (for token-based auth, e.g., in iframes)
+        // Otherwise fall back to cookie-based auth
+        const accessToken = (response.data as { accessToken?: string }).accessToken;
+        if (accessToken) {
+          setToken(accessToken);
+          setBearerToken(accessToken); // Store in API client for Bearer token auth
+        } else {
+          setToken(null); // Using cookies for authentication
+        }
+        
         setSession({
           userId: response.data.user.id,
           email: response.data.user.email,
@@ -287,6 +307,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setToken(null);
       setSession(null);
+      setBearerToken(null); // Clear Bearer token from API client
       if (refreshTimerRef.current) {
         clearInterval(refreshTimerRef.current);
       }

@@ -75,6 +75,26 @@ export function setGlobalAuthModalTrigger(trigger: (context?: string) => void) {
 }
 
 /**
+ * Global Bearer token storage (in memory, not cookies/localStorage)
+ * Used for iframe integration where parent sends token via postMessage
+ */
+let bearerToken: string | null = null;
+
+/**
+ * Set Bearer token from postMessage (for iframe integration)
+ */
+export function setBearerToken(token: string | null) {
+	bearerToken = token;
+}
+
+/**
+ * Get current Bearer token
+ */
+export function getBearerToken(): string | null {
+	return bearerToken;
+}
+
+/**
  * API Client Error class with proper error context
  */
 export class ApiError extends Error {
@@ -167,6 +187,14 @@ class ApiClient {
 	private getAuthHeaders(): Record<string, string> {
 		const headers: Record<string, string> = {};
 
+		// Priority 1: Bearer token (for iframe integration)
+		// When Bearer token is present, skip CSRF and cookies
+		if (bearerToken) {
+			headers['Authorization'] = `Bearer ${bearerToken}`;
+			return headers; // Skip CSRF and session tokens when using Bearer token
+		}
+
+		// Priority 2: Cookie-based auth (fallback for non-iframe usage)
 		// Add session token for anonymous users if not authenticated
 		// This will be handled automatically by cookies/credentials for authenticated users
 		const sessionToken = localStorage.getItem('anonymous_session_token');
@@ -174,7 +202,7 @@ class ApiClient {
 			headers['X-Session-Token'] = sessionToken;
 		}
 
-		// Add CSRF token for state-changing requests
+		// Add CSRF token for state-changing requests (only when not using Bearer token)
 		if (this.csrfTokenInfo && !this.isCSRFTokenExpired()) {
 			headers['X-CSRF-Token'] = this.csrfTokenInfo.token;
 		}
@@ -310,7 +338,8 @@ class ApiClient {
 	): Promise<{ response: Response; data: ApiResponse<T> | null }> {
 		this.ensureSessionToken();
 		
-		if (!await this.ensureCsrfToken(options.method || 'GET')) {
+		// Skip CSRF token when using Bearer token (CSRF is not needed for token-based auth)
+		if (!bearerToken && !await this.ensureCsrfToken(options.method || 'GET')) {
 			throw new ApiError(
 				500,
 				'Internal Error',
