@@ -72,16 +72,16 @@ export const DEFAULT_RATE_LIMIT_SETTINGS: RateLimitSettings = {
 	appCreation: {
 		enabled: true,
 		store: RateLimitStore.DURABLE_OBJECT,
-		limit: 10,
-        dailyLimit: 10,
+		limit: 50, // Increased from 10 to 50 per 4 hours
+        dailyLimit: 100, // Increased from 10 to 100 per day
 		period: 4 * 60 * 60, // 4 hour
 	},
 	llmCalls: {
 		enabled: true,
 		store: RateLimitStore.DURABLE_OBJECT,
-		limit: 500,
+		limit: 2000, // Increased from 500 to 2000 credits per 2 hours
 		period: 2 * 60 * 60, // 2 hour
-        dailyLimit: 1700,
+        dailyLimit: 10000, // Increased from 1700 to 10000 credits per day
 		excludeBYOKUsers: true,
 	},
 };

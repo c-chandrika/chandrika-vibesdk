@@ -2053,20 +2053,36 @@ export class SandboxSdkClient extends BaseSandboxService {
             }
             
             // Step 8: Determine deployment URL
-            let deployedUrl = `${this.getProtocolForHost()}://${projectName}.${getPreviewDomain(env)}`;
-            const deploymentId = projectName;
-
-            // In local/dev or when using tunnels for preview, prefer the tunnel URL as the live URL.
-            // This ensures the "Live URL" shown in the UI is actually reachable (trycloudflare)
-            // instead of a *.localhost hostname that may not be routed in local environments.
             const previewDomain = getPreviewDomain(env);
-            if ((env.USE_TUNNEL_FOR_PREVIEW || previewDomain.includes('localhost')) && metadata?.tunnelURL) {
-                this.logger.info('Overriding deployedUrl with tunnelURL for local/dev environment', {
-                    previousDeployedUrl: deployedUrl,
+            const isWorkersDevDomain = previewDomain.includes('.workers.dev');
+            
+            // For .workers.dev domains, we MUST use tunnel URLs (wildcard subdomains don't work)
+            // For other domains, use tunnel if configured or if it's localhost
+            let deployedUrl: string;
+            if (isWorkersDevDomain) {
+                // .workers.dev domains don't support wildcard subdomains - must use tunnel
+                if (!metadata?.tunnelURL) {
+                    throw new Error('Tunnel URL is required for .workers.dev domains but was not created. Please ensure USE_TUNNEL_FOR_PREVIEW=true or ENVIRONMENT=dev');
+                }
+                deployedUrl = metadata.tunnelURL;
+                this.logger.info('Using tunnel URL for .workers.dev domain (wildcard subdomains not supported)', {
                     tunnelURL: metadata.tunnelURL,
                 });
-                deployedUrl = metadata.tunnelURL;
+            } else {
+                // For custom domains, use subdomain URL by default
+                deployedUrl = `${this.getProtocolForHost()}://${projectName}.${previewDomain}`;
+                
+                // Override with tunnel URL if configured for local/dev
+                if ((env.USE_TUNNEL_FOR_PREVIEW || previewDomain.includes('localhost')) && metadata?.tunnelURL) {
+                    this.logger.info('Overriding deployedUrl with tunnelURL for local/dev environment', {
+                        previousDeployedUrl: deployedUrl,
+                        tunnelURL: metadata.tunnelURL,
+                    });
+                    deployedUrl = metadata.tunnelURL;
+                }
             }
+            
+            const deploymentId = projectName;
             
             this.logger.info('Deployment successful', { 
                 instanceId,
