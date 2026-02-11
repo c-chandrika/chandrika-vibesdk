@@ -100,7 +100,7 @@ export function AuthButton({ className }: AuthButtonProps) {
 				.toUpperCase()
 				.slice(0, 2);
 		}
-		return user.email.charAt(0).toUpperCase();
+		return user.email?.charAt(0).toUpperCase() || 'U';
 	};
 
 	return (
