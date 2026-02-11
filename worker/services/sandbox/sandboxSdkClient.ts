@@ -808,9 +808,9 @@ export class SandboxSdkClient extends BaseSandboxService {
             return new Promise<string>((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     // reject(new Error('Timeout waiting for cloudflared tunnel URL'));
-                    this.logger.warn('Timeout waiting for cloudflared tunnel URL');
+                    this.logger.warn('Timeout waiting for cloudflared tunnel URL - this may cause issues for .workers.dev domains');
                     resolve('');
-                }, 20000); // 20 second timeout
+                }, 40000); // 40 second timeout - increased for .workers.dev domains
 
                 const processLogs = async () => {
                     try {
@@ -1028,7 +1028,23 @@ export class SandboxSdkClient extends BaseSandboxService {
                     // For .workers.dev domains, we MUST use tunnel (port exposure will fail)
                     if (isWorkersDevDomain) {
                         if (!tunnelURL || tunnelURL.trim() === '') {
-                            throw new Error(`Tunnel URL is required for .workers.dev domains but tunnel was not created. Please set USE_TUNNEL_FOR_PREVIEW=true or ensure ENVIRONMENT=dev`);
+                            // Retry tunnel creation once more with longer timeout
+                            this.logger.warn('Tunnel creation timed out for .workers.dev domain, retrying...', { instanceId });
+                            try {
+                                tunnelURL = await this.startCloudflaredTunnel(instanceId, allocatedPort);
+                            } catch (retryError) {
+                                this.logger.error('Retry tunnel creation failed', { instanceId, error: retryError });
+                            }
+                            
+                            // If still no tunnel, throw error
+                            if (!tunnelURL || tunnelURL.trim() === '') {
+                                throw new Error(
+                                    `Tunnel URL is required for .workers.dev domains but tunnel creation timed out. ` +
+                                    `This can happen due to slow network or cloudflared issues. ` +
+                                    `Please try again or use a custom domain instead of .workers.dev. ` +
+                                    `Current CUSTOM_DOMAIN: ${env.CUSTOM_DOMAIN || 'not set'}`
+                                );
+                            }
                         }
                         this.logger.info('Using tunnel URL for .workers.dev domain (port exposure not supported)', { 
                             instanceId, 
