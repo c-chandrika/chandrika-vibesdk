@@ -15,17 +15,21 @@ const PROVIDER_OVERRIDE_VALUES = ['cloudflare', 'direct'] as const;
  */
 export const users = sqliteTable('users', {
     id: text('id').primaryKey(),
-    email: text('email').notNull().unique(),
+    email: text('email').unique(), // Made nullable for SSO users
     username: text('username').unique(), // Optional username for public identity
     displayName: text('display_name').notNull(),
     avatarUrl: text('avatar_url'),
     bio: text('bio'),
     
     // OAuth and Authentication
-    provider: text('provider').notNull(), // 'github', 'google', 'email'
+    provider: text('provider').notNull(), // 'github', 'google', 'email', 'sso'
     providerId: text('provider_id').notNull(),
     emailVerified: integer('email_verified', { mode: 'boolean' }).default(false),
     passwordHash: text('password_hash'), // Only for provider: 'email'
+    
+    // SSO fields (for learning platform integration)
+    phone: text('phone').unique(), // Phone number for SSO users
+    externalId: text('external_id').unique(), // External user ID from learning platform
     
     // Security enhancements
     failedLoginAttempts: integer('failed_login_attempts').default(0),

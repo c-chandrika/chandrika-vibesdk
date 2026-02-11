@@ -14,7 +14,7 @@ export type OAuthProvider = 'google' | 'github';
  */
 export interface AuthUser {
 	id: string;
-	email: string;
+	email?: string; // Made optional for SSO users
 	displayName?: string;
 	username?: string;
 	avatarUrl?: string;
@@ -24,6 +24,8 @@ export interface AuthUser {
     emailVerified?: boolean;
     createdAt?: Date;
     isAnonymous?: boolean;
+    phone?: string; // Phone number for SSO users
+    externalId?: string; // External user ID from learning platform
 }
 
 /**
@@ -31,7 +33,7 @@ export interface AuthUser {
  */
 export interface AuthSession {
 	userId: string;
-	email: string;
+	email?: string; // Made optional for SSO users
 	sessionId: string;
 	expiresAt: Date | null;
 };
@@ -46,7 +48,7 @@ export interface TokenPayload {
 	exp: number; // Expires at
 
 	// Custom claims
-	email: string;
+	email?: string; // Made optional for SSO users
 	type: 'access' | 'refresh';
 	jti?: string; // JWT ID (for refresh tokens)
 

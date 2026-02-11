@@ -91,3 +91,14 @@ export type VerifyEmailRequest = z.infer<typeof verifyEmailSchema>;
 export const oauthProviderSchema = z.enum(['google', 'github']);
 
 export type OAuthProviderParam = z.infer<typeof oauthProviderSchema>;
+
+/**
+ * SSO Login request schema (for learning platform integration)
+ */
+export const ssoLoginSchema = z.object({
+  id: z.string().min(1, 'User ID is required'),
+  name: z.string().min(2, 'Name is required'),
+  phone: z.string().regex(/^\+\d{10,15}$/, 'Phone must be in format +919492832245')
+});
+
+export type SsoLoginRequest = z.infer<typeof ssoLoginSchema>;

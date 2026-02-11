@@ -50,6 +50,7 @@ export function createApp(env: Env): Hono<AppEnv> {
             '/api/auth/verify-email',
             '/api/auth/resend-verification',
             '/api/auth/exchange-api-key', // SDK token exchange
+            '/api/auth/sso-login', // SSO login from learning platform
         ];
         
         if (csrfExemptPaths.includes(pathname)) {

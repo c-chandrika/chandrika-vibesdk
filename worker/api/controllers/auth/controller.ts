@@ -10,7 +10,8 @@ import { generateApiKey, sha256Hash } from '../../../utils/cryptoUtils';
 import { 
     loginSchema, 
     registerSchema, 
-    oauthProviderSchema
+    oauthProviderSchema,
+    ssoLoginSchema
 } from './authSchemas';
 import { SecurityError } from 'shared/types/errors';
 import {
@@ -146,6 +147,48 @@ export class AuthController extends BaseController {
             }
             
             return AuthController.handleError(error, 'login user');
+        }
+    }
+    
+    /**
+     * SSO Login - Auto-login from trusted learning platform
+     * POST /api/auth/sso-login
+     * Accepts: { id, name, phone }
+     * Returns: { accessToken, user }
+     */
+    static async ssoLogin(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
+        try {
+            // Validate origin (must be from allowed origins)
+            const origin = request.headers.get('Origin');
+            const allowedOrigins = env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || [];
+            
+            if (!origin || !allowedOrigins.includes(origin)) {
+                return AuthController.createErrorResponse('Unauthorized origin', 403);
+            }
+
+            const bodyResult = await AuthController.parseJsonBody(request);
+            if (!bodyResult.success) {
+                return bodyResult.response!;
+            }
+
+            const validatedData = ssoLoginSchema.parse(bodyResult.data);
+            
+            const authService = new AuthService(env);
+            const result = await authService.ssoLogin(validatedData, request);
+            
+            const response = AuthController.createSuccessResponse(
+                formatAuthResponse(result.user, result.sessionId, result.expiresAt, result.accessToken)
+            );
+            
+            // Don't set cookies for SSO (iframe context, Bearer token only)
+            // Parent app will receive accessToken and send via postMessage
+            
+            return response;
+        } catch (error) {
+            if (error instanceof SecurityError) {
+                return AuthController.createErrorResponse(error.message, error.statusCode);
+            }
+            return AuthController.handleError(error, 'SSO login');
         }
     }
     
@@ -614,7 +657,7 @@ export class AuthController extends BaseController {
             const accessToken = await jwtUtils.createToken(
                 {
                     sub: user.id,
-                    email: user.email,
+                    email: user.email || undefined,
                     type: 'access',
                     sessionId,
                 },

@@ -432,7 +432,7 @@ export class AuthService extends BaseService {
             );
             
             // Log auth attempt
-            await this.logAuthAttempt(user.email, `oauth_${provider}`, true, request);
+            await this.logAuthAttempt(user.email || 'sso_user', `oauth_${provider}`, true, request);
             
             logger.info('OAuth login successful', { userId: user.id, provider });
             
@@ -841,5 +841,119 @@ export class AuthService extends BaseService {
                 500
             );
         }
+    }
+
+    /**
+     * SSO Login - Auto-login from trusted learning platform
+     */
+    async ssoLogin(userData: { id: string; name: string; phone: string }, request: Request): Promise<AuthResult> {
+        try {
+            // 1. Find existing user by phone
+            const existingUser = await this.getUserByPhone(userData.phone);
+            
+            // 2. If user doesn't exist, create new user
+            let user: AuthUser;
+            if (existingUser) {
+                user = existingUser;
+                // Update name and externalId if changed
+                if (existingUser.displayName !== userData.name || existingUser.externalId !== userData.id) {
+                    await this.updateSSOUser(existingUser.id, userData.name, userData.id);
+                    user.displayName = userData.name;
+                    user.externalId = userData.id;
+                }
+            } else {
+                // Create new user with phone as identifier
+                user = await this.createUserFromSSO(userData);
+            }
+            
+            // 3. Create session and access token
+            const { accessToken, session } = await this.sessionService.createSession(user.id, request);
+            
+            logger.info('SSO login successful', { userId: user.id, phone: userData.phone });
+            
+            return {
+                user,
+                sessionId: session.sessionId,
+                expiresAt: session.expiresAt,
+                accessToken
+            };
+        } catch (error) {
+            logger.error('SSO login error', error);
+            if (error instanceof SecurityError) {
+                throw error;
+            }
+            throw new SecurityError(
+                SecurityErrorType.UNAUTHORIZED,
+                'SSO login failed',
+                500
+            );
+        }
+    }
+
+    /**
+     * Get user by phone number
+     */
+    private async getUserByPhone(phone: string): Promise<AuthUser | null> {
+        const result = await this.database
+            .select()
+            .from(schema.users)
+            .where(
+                and(
+                    eq(schema.users.phone, phone),
+                    sql`${schema.users.deletedAt} IS NULL`
+                )
+            )
+            .get();
+        
+        return result ? mapUserResponse(result) : null;
+    }
+
+    /**
+     * Create user from SSO data
+     */
+    private async createUserFromSSO(userData: { id: string; name: string; phone: string }): Promise<AuthUser> {
+        const userId = generateId();
+        const now = new Date();
+        
+        await this.database.insert(schema.users).values({
+            id: userId,
+            displayName: userData.name,
+            phone: userData.phone,
+            externalId: userData.id,
+            provider: 'sso',
+            providerId: userData.id,
+            email: null,
+            passwordHash: null,
+            isActive: true,
+            emailVerified: true, // Auto-verify SSO users
+            createdAt: now,
+            updatedAt: now
+        });
+        
+        const user = await this.getUserForAuth(userId);
+        if (!user) {
+            throw new SecurityError(
+                SecurityErrorType.INVALID_INPUT,
+                'Failed to create SSO user',
+                500
+            );
+        }
+        
+        logger.info('SSO user created', { userId, phone: userData.phone });
+        return user;
+    }
+
+    /**
+     * Update SSO user name and external ID
+     */
+    private async updateSSOUser(userId: string, name: string, externalId: string): Promise<void> {
+        await this.database
+            .update(schema.users)
+            .set({
+                displayName: name,
+                externalId: externalId,
+                updatedAt: new Date()
+            })
+            .where(eq(schema.users.id, userId));
     }
 }

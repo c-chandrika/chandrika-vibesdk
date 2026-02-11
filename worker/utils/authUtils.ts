@@ -254,7 +254,7 @@ export interface SessionResponse {
 }
 
 export function mapUserResponse(
-	user: (Partial<User> & { id: string; email: string }) | AuthUser,
+	user: (Partial<User> & { id: string }) | AuthUser,
 ): AuthUser {
 	// Handle AuthUser type - already in correct format
 	if ('isAnonymous' in user) {
@@ -264,7 +264,7 @@ export function mapUserResponse(
 	// Map from User schema type
 	return {
 		id: user.id,
-		email: user.email,
+		email: user.email || undefined,
 		displayName: user.displayName || undefined,
 		username: user.username || undefined,
 		avatarUrl: user.avatarUrl || undefined,
@@ -273,6 +273,8 @@ export function mapUserResponse(
 		provider: user.provider || undefined,
 		emailVerified: user.emailVerified || undefined,
 		createdAt: user.createdAt || undefined,
+		phone: user.phone || undefined,
+		externalId: user.externalId || undefined,
 	};
 }
 
