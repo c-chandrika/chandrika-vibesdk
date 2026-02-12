@@ -262,6 +262,20 @@ export type ProfileResponseData = {
   sessionId: string;
 };
 
+// Parent App Login Types (iframe integration)
+export interface ParentLoginRequest {
+  id: string;
+  name: string;
+  phone: string;
+}
+
+export interface ParentLoginResponseData {
+  accessToken: string;
+  user: AuthUser;
+  sessionId: string;
+  expiresAt: string;
+}
+
 export interface AuthProvidersResponseData {
   providers: {
     google: boolean;

@@ -22,10 +22,12 @@ export const users = sqliteTable('users', {
     bio: text('bio'),
     
     // OAuth and Authentication
-    provider: text('provider').notNull(), // 'github', 'google', 'email'
+    provider: text('provider').notNull(), // 'github', 'google', 'email', 'parent'
     providerId: text('provider_id').notNull(),
     emailVerified: integer('email_verified', { mode: 'boolean' }).default(false),
     passwordHash: text('password_hash'), // Only for provider: 'email'
+    externalId: text('external_id'), // For parent app integration (stores parent's user ID)
+    phoneNumber: text('phone_number'), // Phone number for parent app auth
     
     // Security enhancements
     failedLoginAttempts: integer('failed_login_attempts').default(0),
@@ -56,6 +58,8 @@ export const users = sqliteTable('users', {
     lockedUntilIdx: index('users_locked_until_idx').on(table.lockedUntil),
     isActiveIdx: index('users_is_active_idx').on(table.isActive),
     lastActiveAtIdx: index('users_last_active_at_idx').on(table.lastActiveAt),
+    externalIdIdx: index('users_external_id_idx').on(table.externalId),
+    phoneNumberIdx: index('users_phone_number_idx').on(table.phoneNumber),
 }));
 
 /**

@@ -10,7 +10,8 @@ import { generateApiKey, sha256Hash } from '../../../utils/cryptoUtils';
 import { 
     loginSchema, 
     registerSchema, 
-    oauthProviderSchema
+    oauthProviderSchema,
+    parentLoginSchema
 } from './authSchemas';
 import { SecurityError } from 'shared/types/errors';
 import {
@@ -146,6 +147,86 @@ export class AuthController extends BaseController {
             }
             
             return AuthController.handleError(error, 'login user');
+        }
+    }
+    
+    /**
+     * Parent app login (for iframe integration)
+     * POST /api/auth/parent-login
+     * Accepts {id, name, phone} from parent app, creates/updates user by phone
+     */
+    static async parentLogin(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
+        try {
+            const bodyResult = await AuthController.parseJsonBody(request);
+            if (!bodyResult.success) {
+                return bodyResult.response!;
+            }
+
+            const validatedData = parentLoginSchema.parse(bodyResult.data);
+            
+            const authService = new AuthService(env);
+            const userService = new UserService(env);
+            
+            // Find user by phone number
+            const existingUser = await userService.findUserByPhone(validatedData.phone);
+            
+            let userId: string;
+            
+            if (!existingUser) {
+                // Auto-create user with phone number
+                const newUserId = await userService.createParentAppUser({
+                    externalId: validatedData.id,
+                    name: validatedData.name,
+                    phone: validatedData.phone
+                });
+                
+                if (!newUserId) {
+                    return AuthController.createErrorResponse(
+                        'Failed to create user',
+                        500
+                    );
+                }
+                
+                userId = newUserId;
+            } else {
+                // Update externalId and name if changed
+                await userService.updateParentAppUser(existingUser.id, {
+                    externalId: validatedData.id,
+                    name: validatedData.name
+                });
+                
+                userId = existingUser.id;
+            }
+            
+            // Get user for auth (returns AuthUser type)
+            const authUser = await authService.getUserForAuth(userId);
+            if (!authUser) {
+                return AuthController.createErrorResponse(
+                    'Failed to retrieve user',
+                    500
+                );
+            }
+            
+            // Create session
+            const sessionService = new SessionService(env);
+            const { accessToken, session } = await sessionService.createSession(
+                userId,
+                request
+            );
+            
+            // Return only access token (no cookies for iframe integration)
+            return AuthController.createSuccessResponse({
+                accessToken,
+                user: mapUserResponse(authUser),
+                sessionId: session.sessionId,
+                expiresAt: session.expiresAt?.toISOString() || new Date(Date.now() + SessionService.config.sessionTTL).toISOString()
+            });
+        } catch (error) {
+            if (error instanceof SecurityError) {
+                return AuthController.createErrorResponse(error.message, error.statusCode);
+            }
+            
+            return AuthController.handleError(error, 'parent login');
         }
     }
     

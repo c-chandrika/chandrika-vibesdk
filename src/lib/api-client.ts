@@ -95,6 +95,19 @@ export function getBearerToken(): string | null {
 }
 
 /**
+ * Send postMessage to parent window (for iframe integration)
+ */
+function sendMessageToParent(message: { type: string; [key: string]: unknown }) {
+	if (typeof window !== 'undefined' && window.parent !== window) {
+		try {
+			window.parent.postMessage(message, '*');
+		} catch (error) {
+			console.error('Failed to send message to parent:', error);
+		}
+	}
+}
+
+/**
  * API Client Error class with proper error context
  */
 export class ApiError extends Error {
@@ -377,13 +390,21 @@ class ApiClient {
 			const data = await response.json() as ApiResponse<T>;
 
 			if (!response.ok) {
-                if (
-                    response.status === 401 &&
-                    globalAuthModalTrigger &&
-                    this.shouldTriggerAuthModal(endpoint)
-                ) {
-                    const authContext = this.getAuthContextForEndpoint(endpoint);
-                    globalAuthModalTrigger(authContext);
+                // Handle 401 errors - notify parent if using Bearer token (iframe integration)
+                if (response.status === 401) {
+                    if (bearerToken) {
+                        // Iframe integration - notify parent of token expiry
+                        sendMessageToParent({
+                            type: 'vibesdk-token-expired',
+                            origin: window.location.origin,
+                            message: 'Authentication token expired'
+                        });
+                        console.log('Token expired - notified parent window');
+                    } else if (globalAuthModalTrigger && this.shouldTriggerAuthModal(endpoint)) {
+                        // Standard auth flow - trigger modal
+                        const authContext = this.getAuthContextForEndpoint(endpoint);
+                        globalAuthModalTrigger(authContext);
+                    }
                 }
 
                 const errorData = data.error;

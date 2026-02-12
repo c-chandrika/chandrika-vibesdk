@@ -11,7 +11,9 @@ import './index.css';
 initSentry();
 
 // Listen for Bearer token from parent window (for iframe integration)
-// Parent app sends token via postMessage with format: { type: 'VIBESDK_TOKEN', token: '...' }
+// Supports both formats:
+// 1. Legacy: { type: 'VIBESDK_TOKEN', token: '...' }
+// 2. New spec: { type: 'vibesdk-auth', token: '...', origin: '...' }
 if (typeof window !== 'undefined') {
 	window.addEventListener('message', (event: MessageEvent) => {
 		// Security: Only accept messages from allowed origins in production
@@ -31,12 +33,31 @@ if (typeof window !== 'undefined') {
 
 		// Handle token message from parent
 		if (event.data && typeof event.data === 'object') {
-			if (event.data.type === 'VIBESDK_TOKEN' && event.data.token) {
+			const messageType = event.data.type;
+			
+			// Support both VIBESDK_TOKEN (legacy) and vibesdk-auth (new spec)
+			if ((messageType === 'VIBESDK_TOKEN' || messageType === 'vibesdk-auth') && event.data.token) {
 				setBearerToken(event.data.token);
 				console.log('Bearer token received from parent window');
-			} else if (event.data.type === 'VIBESDK_TOKEN_CLEAR') {
+				
+				// Send success confirmation to parent
+				if (window.parent !== window) {
+					try {
+						window.parent.postMessage({
+							type: 'vibesdk-login-success',
+							origin: window.location.origin
+						}, '*');
+					} catch (error) {
+						console.error('Failed to send login success message to parent:', error);
+					}
+				}
+			} else if (messageType === 'VIBESDK_TOKEN_CLEAR' || messageType === 'vibesdk-token-clear') {
 				setBearerToken(null);
 				console.log('Bearer token cleared');
+			} else if (messageType === 'vibesdk-refresh-token' && event.data.token) {
+				// Handle token refresh from parent
+				setBearerToken(event.data.token);
+				console.log('Bearer token refreshed from parent window');
 			}
 		}
 	});

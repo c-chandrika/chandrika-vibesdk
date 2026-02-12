@@ -91,3 +91,14 @@ export type VerifyEmailRequest = z.infer<typeof verifyEmailSchema>;
 export const oauthProviderSchema = z.enum(['google', 'github']);
 
 export type OAuthProviderParam = z.infer<typeof oauthProviderSchema>;
+
+/**
+ * Parent app login schema (for iframe integration)
+ */
+export const parentLoginSchema = z.object({
+  id: z.string().min(1, 'User ID is required'),
+  name: z.string().min(1, 'Name is required'),
+  phone: z.string().regex(/^\+91\d{10}$/, 'Phone must be in format +91XXXXXXXXXX')
+});
+
+export type ParentLoginRequest = z.infer<typeof parentLoginSchema>;

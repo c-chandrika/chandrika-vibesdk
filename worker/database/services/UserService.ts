@@ -65,6 +65,76 @@ export class UserService extends BaseService {
             .where(eq(schema.users.id, userId));
     }
 
+    /**
+     * Find user by phone number (for parent app integration)
+     */
+    async findUserByPhone(phone: string): Promise<schema.User | null> {
+        const users = await this.database
+            .select()
+            .from(schema.users)
+            .where(
+                and(
+                    eq(schema.users.phoneNumber, phone),
+                    sql`${schema.users.deletedAt} IS NULL`
+                )
+            )
+            .limit(1);
+        return users[0] || null;
+    }
+
+    /**
+     * Create user for parent app integration
+     */
+    async createParentAppUser(data: {
+        externalId: string;
+        name: string;
+        phone: string;
+    }): Promise<string | null> {
+        try {
+            const userId = generateId();
+            // Create a pseudo-email from phone number for uniqueness
+            const pseudoEmail = `${data.phone.replace('+', '')}@parent-app.vibesdk.internal`;
+            
+            await this.database
+                .insert(schema.users)
+                .values({
+                    id: userId,
+                    email: pseudoEmail,
+                    displayName: data.name,
+                    provider: 'parent',
+                    providerId: data.externalId,
+                    externalId: data.externalId,
+                    phoneNumber: data.phone,
+                    emailVerified: true, // Auto-verify for parent app users
+                    isActive: true,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                });
+            
+            return userId;
+        } catch (error) {
+            console.error('Error creating parent app user:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Update parent app user details
+     */
+    async updateParentAppUser(userId: string, data: {
+        externalId: string;
+        name: string;
+    }): Promise<void> {
+        await this.database
+            .update(schema.users)
+            .set({
+                externalId: data.externalId,
+                displayName: data.name,
+                updatedAt: new Date()
+            })
+            .where(eq(schema.users.id, userId));
+    }
+
     // ========================================
     // SESSION MANAGEMENT
     // ========================================
