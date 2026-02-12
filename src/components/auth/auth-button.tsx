@@ -56,7 +56,7 @@ export function AuthButton({ className }: AuthButtonProps) {
 					className={clsx('gap-2', className)}
 				>
 					<LogIn className="h-4 w-4" />
-					<span>Sign In</span>
+					<span>Sign In.</span>
 				</Button>
 
 				<LoginModal
