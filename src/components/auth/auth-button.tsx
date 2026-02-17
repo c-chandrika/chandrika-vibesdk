@@ -151,9 +151,11 @@ export function AuthButton({ className }: AuthButtonProps) {
 											{user.displayName || 'User'}
 										</span>
 									</div>
-									<span className="text-xs text-text-tertiary">
-										{user.email}
-									</span>
+									{user.provider !== 'parent' && (
+										<span className="text-xs text-text-tertiary">
+											{user.email}
+										</span>
+									)}
 								</div>
 							</div>
 						</DropdownMenuLabel>

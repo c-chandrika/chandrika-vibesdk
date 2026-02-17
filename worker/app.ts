@@ -47,6 +47,7 @@ export function createApp(env: Env): Hono<AppEnv> {
         const csrfExemptPaths = [
             '/api/auth/login',
             '/api/auth/register',
+            '/api/auth/parent-login', // Parent app iframe integration
             '/api/auth/verify-email',
             '/api/auth/resend-verification',
             '/api/auth/exchange-api-key', // SDK token exchange

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VibeSDK Parent App Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        .config-section {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-weight: 500;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 16px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+        .log-entry {
+            margin-bottom: 4px;
+            padding: 2px 0;
+        }
+        .log-entry.info { color: #4ec9b0; }
+        .log-entry.success { color: #6a9955; }
+        .log-entry.error { color: #f48771; }
+        .log-entry.warning { color: #dcdcaa; }
+        iframe {
+            width: 100%;
+            height: 700px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+        }
+        .buttons {
+            margin: 16px 0;
+        }
+        .token-display {
+            background: #f9f9f9;
+            padding: 12px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px;
+            word-break: break-all;
+            margin-top: 10px;
+            border: 1px solid #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 VibeSDK Iframe Integration Test</h1>
+        
+        <div class="config-section">
+            <h3>Configuration</h3>
+            <div class="form-group">
+                <label for="apiUrl">VibeSDK API URL:</label>
+                <input type="text" id="apiUrl" value="http://localhost:8787" placeholder="http://localhost:8787">
+            </div>
+            <div class="form-group">
+                <label for="iframeUrl">VibeSDK Iframe URL:</label>
+                <input type="text" id="iframeUrl" value="http://localhost:5173" placeholder="http://localhost:5173">
+            </div>
+            <div class="form-group">
+                <label for="userId">User ID:</label>
+                <input type="text" id="userId" value="test_user_123" placeholder="test_user_123">
+            </div>
+            <div class="form-group">
+                <label for="userName">User Name:</label>
+                <input type="text" id="userName" value="Test User" placeholder="Test User">
+            </div>
+            <div class="form-group">
+                <label for="userPhone">User Phone (format: +91XXXXXXXXXX):</label>
+                <input type="text" id="userPhone" value="+919876543210" placeholder="+919876543210">
+            </div>
+        </div>
+
+        <div id="status" style="display: none;"></div>
+
+        <div class="buttons">
+            <button id="initBtn" onclick="initializeVibeSDK()">Initialize VibeSDK</button>
+            <button id="refreshBtn" onclick="refreshToken()" disabled>Refresh Token</button>
+            <button id="clearBtn" onclick="clearToken()">Clear Token</button>
+            <button id="clearLogBtn" onclick="clearLog()">Clear Log</button>
+        </div>
+
+        <div id="tokenDisplay" style="display: none;">
+            <strong>Current Token:</strong>
+            <div class="token-display" id="tokenValue"></div>
+        </div>
+
+        <h3>Console Log</h3>
+        <div class="log" id="log"></div>
+
+        <h3>VibeSDK Iframe</h3>
+        <iframe id="vibesdk-iframe" src="about:blank" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"></iframe>
+    </div>
+
+    <script>
+        let currentToken = null;
+        let autoRefreshInterval = null;
+
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            statusEl.style.display = 'block';
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            log('Log cleared', 'info');
+        }
+
+        async function loginToVibeSDK() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const userId = document.getElementById('userId').value;
+            const userName = document.getElementById('userName').value;
+            const userPhone = document.getElementById('userPhone').value;
+
+            log(`Attempting login with user: ${userName} (${userPhone})`, 'info');
+
+            try {
+                const response = await fetch(`${apiUrl}/api/auth/parent-login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        id: userId,
+                        name: userName,
+                        phone: userPhone
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                log('✓ Login successful', 'success');
+                
+                // Handle both response formats
+                const token = data.data?.accessToken || data.accessToken;
+                
+                if (!token) {
+                    throw new Error('No access token in response');
+                }
+
+                return token;
+            } catch (error) {
+                log(`✗ Login failed: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        function sendTokenToIframe(token) {
+            const iframe = document.getElementById('vibesdk-iframe');
+            
+            if (!iframe.contentWindow) {
+                log('✗ Iframe not ready', 'error');
+                return false;
+            }
+
+            log('Sending token to iframe (vibesdk-auth format)', 'info');
+            iframe.contentWindow.postMessage({
+                type: 'vibesdk-auth',
+                token: token,
+                origin: window.location.origin
+            }, '*');
+
+            // Also send legacy format for compatibility
+            setTimeout(() => {
+                log('Sending token to iframe (VIBESDK_TOKEN format)', 'info');
+                iframe.contentWindow.postMessage({
+                    type: 'VIBESDK_TOKEN',
+                    token: token
+                }, '*');
+            }, 100);
+
+            return true;
+        }
+
+        function updateTokenDisplay(token) {
+            currentToken = token;
+            const tokenDisplay = document.getElementById('tokenDisplay');
+            const tokenValue = document.getElementById('tokenValue');
+            
+            if (token) {
+                // Show first and last 20 chars of token
+                const displayToken = token.length > 60 
+                    ? `${token.substring(0, 30)}...${token.substring(token.length - 30)}`
+                    : token;
+                tokenValue.textContent = displayToken;
+                tokenDisplay.style.display = 'block';
+                log(`Token stored (length: ${token.length})`, 'success');
+            } else {
+                tokenDisplay.style.display = 'none';
+                log('Token cleared', 'warning');
+            }
+        }
+
+        async function initializeVibeSDK() {
+            const initBtn = document.getElementById('initBtn');
+            const refreshBtn = document.getElementById('refreshBtn');
+            const iframe = document.getElementById('vibesdk-iframe');
+            const iframeUrl = document.getElementById('iframeUrl').value;
+
+            try {
+                initBtn.disabled = true;
+                log('=== Starting VibeSDK Initialization ===', 'info');
+
+                // Step 1: Login and get token
+                showStatus('Logging in...', 'info');
+                const token = await loginToVibeSDK();
+                updateTokenDisplay(token);
+                localStorage.setItem('vibesdk_token', token);
+
+                // Step 2: Load iframe
+                showStatus('Loading iframe...', 'info');
+                log(`Loading iframe from: ${iframeUrl}`, 'info');
+                iframe.src = iframeUrl;
+
+                // Step 3: Wait for iframe to load, then send token
+                iframe.onload = () => {
+                    log('✓ Iframe loaded', 'success');
+                    setTimeout(() => {
+                        sendTokenToIframe(token);
+                    }, 500);
+                };
+
+                // Step 4: Enable refresh button
+                refreshBtn.disabled = false;
+
+                // Step 5: Start auto-refresh (every 20 minutes)
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                }
+                autoRefreshInterval = setInterval(refreshToken, 20 * 60 * 1000);
+                log('Auto-refresh enabled (20 minute interval)', 'info');
+
+                showStatus('Initialization complete!', 'success');
+                log('=== Initialization Complete ===', 'success');
+            } catch (error) {
+                showStatus(`Initialization failed: ${error.message}`, 'error');
+                log(`✗ Initialization failed: ${error.message}`, 'error');
+            } finally {
+                initBtn.disabled = false;
+            }
+        }
+
+        async function refreshToken() {
+            log('=== Token Refresh Started ===', 'info');
+            
+            try {
+                const token = await loginToVibeSDK();
+                updateTokenDisplay(token);
+                localStorage.setItem('vibesdk_token', token);
+                sendTokenToIframe(token);
+                showStatus('Token refreshed successfully', 'success');
+                log('=== Token Refresh Complete ===', 'success');
+            } catch (error) {
+                showStatus(`Token refresh failed: ${error.message}`, 'error');
+                log(`✗ Token refresh failed: ${error.message}`, 'error');
+            }
+        }
+
+        function clearToken() {
+            const iframe = document.getElementById('vibesdk-iframe');
+            
+            log('Clearing token', 'warning');
+            currentToken = null;
+            localStorage.removeItem('vibesdk_token');
+            updateTokenDisplay(null);
+            
+            if (iframe.contentWindow) {
+                iframe.contentWindow.postMessage({
+                    type: 'vibesdk-token-clear'
+                }, '*');
+            }
+            
+            showStatus('Token cleared', 'info');
+        }
+
+        // Listen for messages from iframe
+        window.addEventListener('message', (event) => {
+            // In production, validate origin:
+            // if (event.origin !== 'http://localhost:5173') return;
+
+            const messageType = event.data?.type;
+            
+            if (!messageType) return;
+
+            switch (messageType) {
+                case 'vibesdk-login-success':
+                    log('✓ Iframe: Authentication successful', 'success');
+                    showStatus('VibeSDK authenticated successfully!', 'success');
+                    break;
+
+                case 'vibesdk-login-failed':
+                    log(`✗ Iframe: Authentication failed - ${event.data.message || 'Unknown error'}`, 'error');
+                    showStatus('Authentication failed in iframe', 'error');
+                    // Auto-retry
+                    setTimeout(refreshToken, 2000);
+                    break;
+
+                case 'vibesdk-token-expired':
+                    log('⚠ Iframe: Token expired', 'warning');
+                    showStatus('Token expired, refreshing...', 'info');
+                    refreshToken();
+                    break;
+
+                case 'vibesdk-error':
+                    log(`✗ Iframe: Error - ${event.data.message || 'Unknown error'}`, 'error');
+                    showStatus(`Error: ${event.data.message}`, 'error');
+                    break;
+
+                default:
+                    // Log other messages for debugging
+                    if (messageType.startsWith('vibesdk-')) {
+                        log(`Iframe message: ${messageType}`, 'info');
+                    }
+            }
+        });
+
+        // Initialize log
+        log('Parent app loaded and ready', 'info');
+        log('Fill in configuration and click "Initialize VibeSDK"', 'info');
+
+        // Restore token if available
+        const savedToken = localStorage.getItem('vibesdk_token');
+        if (savedToken) {
+            updateTokenDisplay(savedToken);
+            log('Previous token found in localStorage', 'info');
+        }
+    </script>
+</body>
+</html>

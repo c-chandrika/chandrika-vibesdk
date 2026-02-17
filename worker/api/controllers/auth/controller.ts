@@ -286,6 +286,8 @@ export class AuthController extends BaseController {
             if (!routeContext.user) {
                 return AuthController.createErrorResponse('Unauthorized', 401);
             }
+           console.log("profile request", _request);
+           debugger;
             return AuthController.createSuccessResponse({
                 user: mapUserResponse(routeContext.user),
                 sessionId: routeContext.sessionId

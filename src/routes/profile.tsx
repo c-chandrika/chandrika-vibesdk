@@ -128,7 +128,9 @@ export default function Profile() {
                   )}
                 </div>
               </div>
-              <p className="text-text-tertiary mb-1">{user?.email}</p>
+              {user?.provider !== 'parent' && (
+                <p className="text-text-tertiary mb-1">{user?.email}</p>
+              )}
               {user?.bio && <p className="text-sm max-w-2xl">{user.bio}</p>}
             </div>
 

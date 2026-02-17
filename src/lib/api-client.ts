@@ -81,10 +81,20 @@ export function setGlobalAuthModalTrigger(trigger: (context?: string) => void) {
 let bearerToken: string | null = null;
 
 /**
+ * Custom event name dispatched when a bearer token is set via postMessage.
+ * The auth context listens for this to trigger a profile re-fetch.
+ */
+export const BEARER_TOKEN_SET_EVENT = 'vibesdk:bearer-token-set';
+
+/**
  * Set Bearer token from postMessage (for iframe integration)
  */
 export function setBearerToken(token: string | null) {
 	bearerToken = token;
+
+	if (token && typeof window !== 'undefined') {
+		window.dispatchEvent(new CustomEvent(BEARER_TOKEN_SET_EVENT));
+	}
 }
 
 /**
@@ -431,8 +441,6 @@ class ApiClient {
                             throw new SecurityError(errorData.type, errorData.message);
                         }
                     }
-                    console.log("Came here");
-
                     throw new ApiError(
                         response.status,
                         response.statusText,

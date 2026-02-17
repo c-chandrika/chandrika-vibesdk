@@ -5,7 +5,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { apiClient, ApiError, setBearerToken } from '@/lib/api-client';
+import { apiClient, ApiError, setBearerToken, BEARER_TOKEN_SET_EVENT } from '@/lib/api-client';
 import { useSentryUser } from '@/hooks/useSentryUser';
 import type { AuthSession, AuthUser } from '../api-types';
 
@@ -178,14 +178,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Initialize auth state on mount
+  const isEmbeddedInIframe = typeof window !== 'undefined' && window.parent !== window;
+
+  // Initialize auth state on mount.
+  // In iframe mode the profile call is deferred until the parent sends a bearer token
+  // via postMessage — calling it before that would send a cookie-only request that fails.
   useEffect(() => {
     const initAuth = async () => {
       await fetchAuthProviders();
-      await checkAuth();
+
+      if (!isEmbeddedInIframe) {
+        await checkAuth();
+      } else {
+        setIsLoading(false);
+      }
     };
     initAuth();
-  }, [fetchAuthProviders, checkAuth]);
+  }, [fetchAuthProviders, checkAuth, isEmbeddedInIframe]);
+
+  // When a bearer token arrives from the parent (iframe integration),
+  // fetch the profile with the newly available Authorization header.
+  useEffect(() => {
+    if (!isEmbeddedInIframe) return;
+
+    const handleBearerTokenSet = () => {
+      checkAuth();
+    };
+    window.addEventListener(BEARER_TOKEN_SET_EVENT, handleBearerTokenSet);
+    return () => {
+      window.removeEventListener(BEARER_TOKEN_SET_EVENT, handleBearerTokenSet);
+    };
+  }, [checkAuth, isEmbeddedInIframe]);
 
   // OAuth login method with redirect support
   const login = useCallback((provider: 'google' | 'github', redirectUrl?: string) => {
