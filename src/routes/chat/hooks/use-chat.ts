@@ -21,7 +21,7 @@ import {
 import { getFileType } from '@/utils/string';
 import { logger } from '@/utils/logger';
 import { mergeFiles } from '@/utils/file-helpers';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, getTicketWebSocketUrl } from '@/lib/api-client';
 import { appEvents } from '@/lib/app-events';
 import { createWebSocketMessageHandler, type HandleMessageDeps } from '../utils/handle-websocket-message';
 import { isConversationalMessage, addOrUpdateMessage, createUserMessage, handleRateLimitError, createAIMessage, type ChatMessage } from '../utils/message-helpers';
@@ -412,8 +412,14 @@ export function useChat({
 			
 			sendMessage(createAIMessage('websocket_retrying', `🔄 Connection failed. Retrying in ${Math.ceil(actualDelay / 1000)} seconds... (attempt ${retryCount.current + 1}/${maxRetries + 1})\n\n❌ Reason: ${reason}`, true));
 
-			const timeoutId = setTimeout(() => {
-				connectWithRetryRef.current?.(wsUrl, { disableGenerate, isRetry: true });
+			const timeoutId = setTimeout(async () => {
+				try {
+					const retryUrl = await getTicketWebSocketUrl(wsUrl);
+					connectWithRetryRef.current?.(retryUrl, { disableGenerate, isRetry: true });
+				} catch (err) {
+					logger.error('Failed to obtain ticket for retry, using base URL', err);
+					connectWithRetryRef.current?.(wsUrl, { disableGenerate, isRetry: true });
+				}
 			}, actualDelay);
 			
 			retryTimeouts.current.push(timeoutId);
@@ -551,9 +557,10 @@ export function useChat({
 						throw new Error('Failed to initialize agent session');
 					}
 
-					// Connect to WebSocket
+					// Connect to WebSocket (use ticket auth in iframe mode)
 					logger.debug('connecting to ws with created id');
-					connectWithRetry(result.websocketUrl);
+					const newAgentWsUrl = await getTicketWebSocketUrl(result.websocketUrl);
+					connectWithRetry(newAgentWsUrl);
 					setChatId(result.agentId); // This comes from the server response
 					
 					// Emit app-created event for sidebar updates
@@ -587,8 +594,10 @@ export function useChat({
 						throw new Error('Missing websocketUrl for existing agent');
 					}
 
+					// Use ticket auth in iframe mode
 					logger.debug('connecting from init for existing chatId');
-					connectWithRetry(response.data.websocketUrl, {
+					const existingAgentWsUrl = await getTicketWebSocketUrl(response.data.websocketUrl);
+					connectWithRetry(existingAgentWsUrl, {
 						disableGenerate: true, // We'll handle generation resume in the WebSocket open handler
 					});
 				}

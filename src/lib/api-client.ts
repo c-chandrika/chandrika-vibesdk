@@ -105,6 +105,47 @@ export function getBearerToken(): string | null {
 }
 
 /**
+ * Whether the app is running inside an iframe (e.g. parent app embedding VibeSDK).
+ * Cached at module level so every callsite agrees on the same value.
+ */
+export const isEmbeddedInIframe =
+	typeof window !== 'undefined' && window.parent !== window;
+
+/**
+ * Resolve a WebSocket URL for agent connections.
+ * In iframe mode cookies are blocked as third-party, so we obtain a
+ * one-time ticket via the authenticated HTTP API and append it as a
+ * query parameter.  In normal (same-origin) mode the URL is returned as-is.
+ *
+ * Handles retries safely: any stale `ticket` param is stripped before
+ * requesting a fresh one, and the agentId is extracted from the URL path.
+ */
+export async function getTicketWebSocketUrl(
+	wsUrl: string,
+): Promise<string> {
+	if (!isEmbeddedInIframe) return wsUrl;
+
+	// Strip any existing (expired/consumed) ticket parameter
+	const cleanUrl = wsUrl
+		.replace(/[?&]ticket=[^&]+/, '')
+		.replace(/\?$/, '');
+
+	// Extract agentId from /api/agent/{agentId}/ws
+	const match = cleanUrl.match(/\/api\/agent\/([^/?]+)\/ws/);
+	if (!match?.[1]) {
+		throw new Error('Cannot extract agentId from WebSocket URL');
+	}
+
+	const res = await apiClient.createWsTicket(match[1]);
+	if (!res.success || !res.data?.ticket) {
+		throw new Error('Failed to obtain WebSocket ticket for iframe auth');
+	}
+
+	const separator = cleanUrl.includes('?') ? '&' : '?';
+	return `${cleanUrl}${separator}ticket=${encodeURIComponent(res.data.ticket)}`;
+}
+
+/**
  * Send postMessage to parent window (for iframe integration)
  */
 function sendMessageToParent(message: { type: string; [key: string]: unknown }) {
@@ -1056,6 +1097,22 @@ class ApiClient {
 	): Promise<ApiResponse<AgentConnectionData>> {
 		return this.request<AgentConnectionData>(
 			`/api/agent/${agentId}/connect`,
+		);
+	}
+
+	/**
+	 * Create a one-time-use WebSocket ticket for agent connections.
+	 * Used in iframe mode where cookies are blocked as third-party.
+	 */
+	async createWsTicket(
+		agentId: string,
+	): Promise<ApiResponse<{ ticket: string; expiresIn: number }>> {
+		return this.request<{ ticket: string; expiresIn: number }>(
+			'/api/ws-ticket',
+			{
+				method: 'POST',
+				body: { resourceType: 'agent', resourceId: agentId },
+			},
 		);
 	}
 
