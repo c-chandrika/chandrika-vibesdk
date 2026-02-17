@@ -45,20 +45,20 @@
 	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
 	 */
 	"ai": {
-		"binding": "AI",
-        "remote": true
+		"binding": "AI"
+		// "remote": true  // Disabled for local development
 	},
-    "dispatch_namespaces": [
-        {
-            "binding": "DISPATCHER",
-            "namespace": "vibesdk-default-namespace",
-            "remote": true
-        }
-    ],
+    // "dispatch_namespaces": [
+    //     {
+    //         "binding": "DISPATCHER",
+    //         "namespace": "vibesdk-default-namespace",
+    //         "remote": true
+    //     }
+    // ],
 	"containers": [
 		{
 			"class_name": "UserAppSandboxService",
-			"image": "./SandboxDockerfile",
+            "image": "registry.cloudflare.com/vibesdk-production-userappsandboxservice:cfe197fc",
             // "image": "registry.cloudflare.com/vibesdk-production-userappsandboxservice:cfe197fc",
             // Altering max_instances value will have no effect. Please use the MAX_SANDBOX_INSTANCES var instead.
 			"max_instances": 10,
@@ -77,8 +77,8 @@
             "binding": "DB",
             "database_name": "vibesdk-db",
             "database_id": "4f5fe4ac-cff6-4acb-8609-dfef09a506d2",
-            "migrations_dir": "migrations",
-            "remote": true
+            "migrations_dir": "migrations"
+            // "remote": true  // Disabled for local development
         }
     ],
 	"durable_objects": {
@@ -104,15 +104,15 @@
     "r2_buckets": [
         {
             "binding": "TEMPLATES_BUCKET",
-            "bucket_name": "vibesdk-templates",
-            "remote": true
+            "bucket_name": "vibesdk-templates"
+            // "remote": true  // Disabled for local development
         }
     ],
     "kv_namespaces": [
         {
             "binding": "VibecoderStore",
-            "id": "7bfa6410487b4085adf273e01152b22e",
-            "remote": true
+            "id": "7bfa6410487b4085adf273e01152b22e"
+            // "remote": true  // Disabled for local development
         }
     ],
     // "placement": {
@@ -143,7 +143,7 @@
         "TEMPLATES_REPOSITORY": "https://github.com/cloudflare/vibesdk-templates",
         "ALLOWED_EMAIL": "",
         "ALLOWED_ORIGINS": "https://learning-beta.earlywave.in,https://learning.ccbp.in",
-        "DISPATCH_NAMESPACE": "vibesdk-default-namespace",
+        // "DISPATCH_NAMESPACE": "vibesdk-default-namespace",
         "ENABLE_READ_REPLICAS": "true",
         "CLOUDFLARE_AI_GATEWAY": "vibesdk-gateway",
         "PLATFORM_CAPABILITIES": {

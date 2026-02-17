@@ -12,6 +12,7 @@ import { checkAppOwnership } from '../../../middleware/auth/routeAuth';
 import { generateTicketToken, getResourceStub } from '../../../middleware/auth/ticketAuth';
 import type { TicketResourceType } from '../../../middleware/auth/routeAuth';
 import type { PendingWsTicket, AuthUser } from '../../../types/auth-types';
+import { getAgentStub } from '../../../agents';
 
 const TICKET_TTL_MS = 15_000;
 
@@ -31,8 +32,29 @@ async function verifyOwnership(
 	env: Env
 ): Promise<boolean> {
 	switch (resourceType) {
-		case 'agent':
-			return checkAppOwnership(user, { agentId: resourceId }, env);
+		case 'agent': {
+			// First check database ownership
+			const dbOwnership = await checkAppOwnership(user, { agentId: resourceId }, env);
+			if (dbOwnership) {
+				return true;
+			}
+			
+			// Fallback: Check Durable Object state for newly created agents
+			// that might not be in the database yet
+			try {
+				const agentStub = await getAgentStub(env, resourceId);
+				const state = await agentStub.getFullState();
+				// Check if agent state exists and userId matches
+				if (state && 'metadata' in state && state.metadata?.userId === user.id) {
+					return true;
+				}
+			} catch (error) {
+				// Agent doesn't exist in DO either
+				TicketController.logger.debug('Agent not found in Durable Object', { resourceId, error });
+			}
+			
+			return false;
+		}
 		case 'vault':
 			return resourceId === user.id;
 	}
