@@ -5,7 +5,10 @@
  {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "vibesdk-nxtwave",
-	"main": "worker/index.ts",
+	"main": ".wrangler/resolved/worker/index.ts",
+	"build": {
+		"command": "node scripts/resolve-worker-paths.mjs"
+	},
 	"compatibility_date": "2025-08-10",
 	"compatibility_flags": ["nodejs_compat"],
     "version_metadata": {

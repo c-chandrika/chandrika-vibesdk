@@ -1582,6 +1582,13 @@ class CloudflareDeploymentManager {
 		console.log('🚀 Deploying to Cloudflare Workers...');
 
 		try {
+			// Resolve TypeScript path aliases before deploying
+			console.log('🔧 Resolving TypeScript path aliases...');
+			execSync('node scripts/resolve-worker-paths.mjs', {
+				stdio: 'inherit',
+				cwd: PROJECT_ROOT,
+			});
+
 			execSync('wrangler deploy', {
 				stdio: 'inherit',
 				cwd: PROJECT_ROOT,
@@ -1811,11 +1818,31 @@ class CloudflareDeploymentManager {
 
 	/**
 	 * Updates secrets using Wrangler (non-blocking)
+	 * NOTE: Updating secrets via dashboard triggers automatic redeployment.
+	 * We ensure resolved files exist before any deployment to prevent 404 errors.
 	 */
 	private async updateSecrets(): Promise<void> {
 		console.log('🔐 Updating production secrets...');
 
 		try {
+			// CRITICAL: Ensure resolved files exist before updating secrets
+			// When secrets are updated via dashboard, it triggers a redeployment
+			// which needs the resolved files to be present
+			console.log('🔧 Ensuring path aliases are resolved before secret update...');
+			try {
+				execSync('node scripts/resolve-worker-paths.mjs', {
+					stdio: 'inherit',
+					cwd: PROJECT_ROOT,
+				});
+			} catch (error) {
+				console.warn(
+					`⚠️  Could not resolve path aliases: ${error instanceof Error ? error.message : String(error)}`,
+				);
+				console.warn(
+					'   Secret update will proceed, but deployment may fail if resolved files are missing',
+				);
+			}
+
 			const prodVarsPath = join(PROJECT_ROOT, '.prod.vars');
 
 			// Check if .prod.vars file exists, create it if not

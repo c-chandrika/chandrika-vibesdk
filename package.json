@@ -8,6 +8,7 @@
 		"prepare": "husky",
 		"dev": "DEV_MODE=true vite",
 		"build": "tsc -b --incremental && vite build",
+		"build:worker": "node scripts/resolve-worker-paths.mjs",
 		"typecheck": "tsc -b --incremental --noEmit",
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",
