@@ -735,31 +735,48 @@ export class CodeGeneratorAgent extends Agent<Env, AgentState> implements AgentI
 
         let content = file.fileContents;
 
-        // For HTML files, inject base tag
+        // For HTML files, inject base tag and CSP meta tag for iframe embedding
         if (normalized.endsWith('.html') || contentType.includes('text/html')) {
             const baseTag = `<base href="/">`;
+            // Note: frame-ancestors cannot be set via meta tag, but we can set other CSP directives
+            // The main CSP frame-ancestors must come from HTTP headers, which we can't control for tunnel URLs
+            const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws:;">`;
 
-            // Inject base tag after <head> tag if present
+            // Inject base tag and CSP meta after <head> tag if present
             if (content.includes('<head>')) {
-                content = content.replace(/<head>/i, `<head>\n  ${baseTag}`);
+                content = content.replace(/<head>/i, `<head>\n  ${baseTag}\n  ${cspMeta}`);
             } else {
                 // Fallback: inject at the beginning
-                content = baseTag + '\n' + content;
+                content = baseTag + '\n' + cspMeta + '\n' + content;
             }
 
-            this.logger().info('[BROWSER SERVING] Injected base tag');
+            this.logger().info('[BROWSER SERVING] Injected base tag and CSP meta');
         }
+
+        // Build security headers for iframe embedding
+        // Note: For tunnel URLs, these headers won't help as they bypass our worker
+        // But for subdomain patterns and direct sandbox access, they will
+        const securityHeaders: Record<string, string> = {
+            'Content-Type': contentType,
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': '*',
+            'X-Sandbox-Type': 'browser-native',
+            // Allow iframe embedding - use SAMEORIGIN to allow same-origin embedding
+            'X-Frame-Options': 'SAMEORIGIN',
+        };
+        
+        // Try to set frame-ancestors via CSP header
+        // Get allowed origins from env if available
+        const env = this.env;
+        const allowedOrigins = env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean) || [];
+        const frameAncestors = ["'self'", ...allowedOrigins].join(' ');
+        securityHeaders['Content-Security-Policy'] = `frame-ancestors ${frameAncestors}; default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws:;`;
 
         return new Response(content, {
             status: 200,
-            headers: {
-                'Content-Type': contentType,
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, OPTIONS',
-                'Access-Control-Allow-Headers': '*',
-                'X-Sandbox-Type': 'browser-native'
-            }
+            headers: securityHeaders
         });
     }
 
