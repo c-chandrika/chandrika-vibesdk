@@ -239,18 +239,182 @@ function getAllowedFrameAncestors(env: Env): string[] {
     // Add allowed origins as frame ancestors for iframe embedding
     const allowedOrigins = getAllowedOrigins(env);
     for (const origin of allowedOrigins) {
-        // Skip wildcard patterns and localhost in production
-        if (!origin.includes('*') && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
-            frameAncestors.push(origin);
-        } else if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-            // Include localhost in development
+        // Skip wildcard patterns (but allow them to be processed for subdomain matching)
+        if (origin.includes('*')) {
+            // For wildcard patterns like "https://*.domain.com", we can't use them directly in CSP
+            // But we should extract the base domain if possible
+            continue;
+        }
+        
+        // Include all non-wildcard origins (including localhost in dev)
+        if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
             if (isDev(env)) {
                 frameAncestors.push(origin);
             }
+        } else {
+            // Production origins (like learning-beta.earlywave.in)
+            frameAncestors.push(origin);
         }
     }
     
     return frameAncestors;
+}
+
+/**
+ * Build security headers from config (for manual header setting)
+ */
+export function buildSecurityHeaders(config: SecureHeadersConfig): Headers {
+    const headers = new Headers();
+    
+    // Build CSP header
+    if (config.contentSecurityPolicy) {
+        const csp = config.contentSecurityPolicy;
+        const cspParts: string[] = [];
+        
+        if (csp.defaultSrc) cspParts.push(`default-src ${csp.defaultSrc.join(' ')}`);
+        if (csp.scriptSrc) cspParts.push(`script-src ${csp.scriptSrc.join(' ')}`);
+        if (csp.styleSrc) cspParts.push(`style-src ${csp.styleSrc.join(' ')}`);
+        if (csp.fontSrc) cspParts.push(`font-src ${csp.fontSrc.join(' ')}`);
+        if (csp.imgSrc) cspParts.push(`img-src ${csp.imgSrc.join(' ')}`);
+        if (csp.connectSrc) cspParts.push(`connect-src ${csp.connectSrc.join(' ')}`);
+        if (csp.frameSrc) cspParts.push(`frame-src ${csp.frameSrc.join(' ')}`);
+        if (csp.objectSrc) cspParts.push(`object-src ${csp.objectSrc.join(' ')}`);
+        if (csp.mediaSrc) cspParts.push(`media-src ${csp.mediaSrc.join(' ')}`);
+        if (csp.workerSrc) cspParts.push(`worker-src ${csp.workerSrc.join(' ')}`);
+        if (csp.formAction) cspParts.push(`form-action ${csp.formAction.join(' ')}`);
+        if (csp.frameAncestors) cspParts.push(`frame-ancestors ${csp.frameAncestors.join(' ')}`);
+        if (csp.baseUri) cspParts.push(`base-uri ${csp.baseUri.join(' ')}`);
+        if (csp.manifestSrc) cspParts.push(`manifest-src ${csp.manifestSrc.join(' ')}`);
+        if (csp.upgradeInsecureRequests !== undefined && csp.upgradeInsecureRequests.length === 0) {
+            cspParts.push('upgrade-insecure-requests');
+        }
+        
+        if (cspParts.length > 0) {
+            headers.set('Content-Security-Policy', cspParts.join('; '));
+        }
+    }
+    
+    // Set other security headers
+    if (config.strictTransportSecurity) {
+        headers.set('Strict-Transport-Security', config.strictTransportSecurity);
+    }
+    if (config.xFrameOptions !== false) {
+        headers.set('X-Frame-Options', config.xFrameOptions || 'DENY');
+    }
+    if (config.xContentTypeOptions) {
+        headers.set('X-Content-Type-Options', config.xContentTypeOptions);
+    }
+    if (config.xXssProtection !== false) {
+        headers.set('X-XSS-Protection', config.xXssProtection || '1; mode=block');
+    }
+    if (config.referrerPolicy) {
+        headers.set('Referrer-Policy', config.referrerPolicy);
+    }
+    if (config.crossOriginEmbedderPolicy !== false) {
+        headers.set('Cross-Origin-Embedder-Policy', config.crossOriginEmbedderPolicy || 'require-corp');
+    }
+    if (config.crossOriginResourcePolicy) {
+        headers.set('Cross-Origin-Resource-Policy', config.crossOriginResourcePolicy);
+    }
+    if (config.crossOriginOpenerPolicy) {
+        headers.set('Cross-Origin-Opener-Policy', config.crossOriginOpenerPolicy);
+    }
+    if (config.originAgentCluster) {
+        headers.set('Origin-Agent-Cluster', config.originAgentCluster);
+    }
+    if (config.xDnsPrefetchControl) {
+        headers.set('X-DNS-Prefetch-Control', config.xDnsPrefetchControl);
+    }
+    if (config.xDownloadOptions) {
+        headers.set('X-Download-Options', config.xDownloadOptions);
+    }
+    if (config.xPermittedCrossDomainPolicies) {
+        headers.set('X-Permitted-Cross-Domain-Policies', config.xPermittedCrossDomainPolicies);
+    }
+    if (config.permissionsPolicy) {
+        const ppParts = Object.entries(config.permissionsPolicy).map(([key, value]) => {
+            return `${key}=${value.length > 0 ? `(${value.join(' ')})` : '()'}`;
+        });
+        headers.set('Permissions-Policy', ppParts.join(', '));
+    }
+    
+    return headers;
+}
+
+/**
+ * Get relaxed security headers for preview responses (sandbox/dispatcher)
+ * These headers allow iframe embedding while maintaining security
+ */
+export function getPreviewSecurityHeaders(env: Env): SecureHeadersConfig {
+    const isDevelopment = isDev(env);
+    const allowedFrameAncestors = getAllowedFrameAncestors(env);
+    const previewDomain = env.CUSTOM_DOMAIN?.replace(/^https?:\/\//, '').replace(/\/$/, '') || '';
+    
+    return {
+        contentSecurityPolicy: {
+            defaultSrc: ["'self'"],
+            scriptSrc: [
+                "'self'",
+                "'strict-dynamic'",
+                ...(isDevelopment ? ["'unsafe-eval'"] : [])
+            ],
+            styleSrc: [
+                "'self'",
+                "'unsafe-inline'", // Required for Tailwind CSS and generated apps
+                "https://fonts.googleapis.com"
+            ],
+            fontSrc: [
+                "'self'",
+                "https://fonts.gstatic.com",
+                "data:"
+            ],
+            imgSrc: [
+                "'self'",
+                "data:",
+                "blob:",
+                "https://avatars.githubusercontent.com",
+                "https://lh3.googleusercontent.com",
+                "https://*.cloudflare.com"
+            ],
+            connectSrc: [
+                "'self'",
+                "https://api.github.com",
+                "https://api.cloudflare.com",
+                // Allow preview subdomains to connect to main domain and each other
+                ...(previewDomain ? [
+                    `https://*.${previewDomain}`,
+                    `https://${previewDomain}`,
+                    `wss://*.${previewDomain}`,
+                    `wss://${previewDomain}`
+                ] : []),
+                "wss://*", // Allow WebSocket connections
+                "ws://*",
+            ],
+            frameSrc: [
+                "'self'",
+                // Allow preview subdomains to be embedded
+                ...(previewDomain ? [`https://*.${previewDomain}`] : []),
+                "https://*.trycloudflare.com",
+                "http://*.trycloudflare.com",
+            ],
+            objectSrc: ["'none'"],
+            mediaSrc: ["'self'"],
+            workerSrc: ["'self'", "blob:"],
+            formAction: ["'self'"],
+            // Allow framing from allowed origins (for iframe embedding)
+            frameAncestors: allowedFrameAncestors.length > 1 ? allowedFrameAncestors : ["'self'"],
+            baseUri: ["'self'"],
+            manifestSrc: ["'self'"],
+        },
+        // Relaxed X-Frame-Options for previews
+        xFrameOptions: allowedFrameAncestors.length > 1 ? false : 'SAMEORIGIN', // Let CSP handle it
+        xContentTypeOptions: 'nosniff',
+        xXssProtection: false, // Let CSP handle it
+        referrerPolicy: 'strict-origin-when-cross-origin',
+        crossOriginEmbedderPolicy: false,
+        crossOriginResourcePolicy: 'cross-origin',
+        crossOriginOpenerPolicy: 'same-origin-allow-popups',
+    };
 }
 
 /**
@@ -294,8 +458,18 @@ export function getSecureHeadersConfig(env: Env): SecureHeadersConfig {
                 "'self'",
                 "https://api.github.com",
                 "https://api.cloudflare.com",
+                // Allow preview subdomains to connect to main domain
+                ...(env.CUSTOM_DOMAIN ? [`https://*.${env.CUSTOM_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '')}`] : []),
+                "wss://*", // Allow WebSocket connections for previews
+                "ws://*",
             ],
-            frameSrc: ["'self'"],
+            frameSrc: [
+                "'self'",
+                // Allow preview subdomains to be embedded
+                ...(env.CUSTOM_DOMAIN ? [`https://*.${env.CUSTOM_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '')}`] : []),
+                "https://*.trycloudflare.com",
+                "http://*.trycloudflare.com",
+            ],
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],
             workerSrc: ["'self'", "blob:"],

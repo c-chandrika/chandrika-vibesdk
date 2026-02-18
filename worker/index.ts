@@ -6,7 +6,7 @@ import { createApp } from './app';
 import { DORateLimitStore as BaseDORateLimitStore } from './services/rate-limit/DORateLimitStore';
 import { getPreviewDomain } from './utils/urls';
 import { proxyToAiGateway } from './services/aigateway-proxy/controller';
-import { isOriginAllowed } from './config/security';
+import { isOriginAllowed, getPreviewSecurityHeaders, buildSecurityHeaders } from './config/security';
 import { proxyToSandbox } from './services/sandbox/request-handler';
 import { handleGitProtocolRequest, isGitProtocolRequest } from './api/handlers/git-protocol';
 import { getAgentStub } from './agents';
@@ -104,6 +104,14 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
         } else {
             headers.set('X-Preview-Type', 'sandbox');
         }
+        
+        // Apply preview security headers (allows iframe embedding)
+        const previewSecurityConfig = getPreviewSecurityHeaders(env);
+        const previewSecurityHeaders = buildSecurityHeaders(previewSecurityConfig);
+        for (const [key, value] of previewSecurityHeaders.entries()) {
+            headers.set(key, value);
+        }
+        
         headers = setOriginControl(env, request, headers);
         headers.append('Vary', 'Origin');
 		headers.set('Access-Control-Expose-Headers', 'X-Preview-Type');
@@ -140,6 +148,14 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
 		let headers = new Headers(dispatcherResponse.headers);
 
 		headers.set('X-Preview-Type', 'dispatcher');
+		
+		// Apply preview security headers (allows iframe embedding)
+		const previewSecurityConfig = getPreviewSecurityHeaders(env);
+		const previewSecurityHeaders = buildSecurityHeaders(previewSecurityConfig);
+		for (const [key, value] of previewSecurityHeaders.entries()) {
+			headers.set(key, value);
+		}
+		
         headers = setOriginControl(env, request, headers);
         headers.append('Vary', 'Origin');
 		headers.set('Access-Control-Expose-Headers', 'X-Preview-Type');
