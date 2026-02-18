@@ -34,7 +34,7 @@ function resolvePathAliases(content, filePath) {
 	return content;
 }
 
-function processDirectory(srcDir, destDir) {
+function processDirectory(srcDir, destDir, baseDir = rootDir) {
 	mkdirSync(destDir, { recursive: true });
 	
 	const entries = readdirSync(srcDir);
@@ -45,21 +45,24 @@ function processDirectory(srcDir, destDir) {
 		const stat = statSync(srcPath);
 		
 		if (stat.isDirectory()) {
-			processDirectory(srcPath, destPath);
+			processDirectory(srcPath, destPath, baseDir);
 		} else if (entry.endsWith('.ts') || entry.endsWith('.tsx')) {
 			let content = readFileSync(srcPath, 'utf-8');
 			content = resolvePathAliases(content, destPath);
 			writeFileSync(destPath, content);
 		} else {
+			// Copy other files as-is
 			copyFileSync(srcPath, destPath);
 		}
 	}
 }
 
 try {
+	// Process worker directory
 	console.log('📦 Processing worker directory...');
 	processDirectory(path.join(rootDir, 'worker'), tempWorkerDir);
 	
+	// Process shared directory
 	console.log('📦 Processing shared directory...');
 	processDirectory(path.join(rootDir, 'shared'), tempSharedDir);
 	
