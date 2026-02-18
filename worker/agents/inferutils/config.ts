@@ -54,33 +54,33 @@ const PLATFORM_AGENT_CONFIG: AgentConfig = {
     blueprint: {
         name: AIModels.GEMINI_2_5_FLASH, // Use cheaper model to avoid rate limits
         reasoning_effort: undefined, // Remove reasoning effort to reduce token usage
-        max_tokens: 16000, // Reduce max tokens
+        max_tokens: 8000, // Reduced from 16000 to save tokens
         fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
         temperature: 1.0,
     },
     projectSetup: {
         name: AIModels.GROK_4_1_FAST,
         reasoning_effort: 'medium',
-        max_tokens: 8000,
+        max_tokens: 6000, // Reduced from 8000 to save tokens
         temperature: 1,
         fallbackModel: AIModels.GEMINI_2_5_PRO,
     },
     phaseGeneration: {
         name: AIModels.GEMINI_2_5_FLASH, // Use cheaper model
         reasoning_effort: 'medium', // Remove reasoning to reduce tokens
-        max_tokens: 8000,
+        max_tokens: 5000, // Reduced from 8000 to save tokens
         temperature: 1,
         fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     firstPhaseImplementation: {
         name: AIModels.GEMINI_2_5_FLASH, // Use cheaper model
-        max_tokens: 48000,
+        max_tokens: 32000, // Reduced from 48000 to save tokens while maintaining quality
         temperature: 1,
         fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     phaseImplementation: {
         name: AIModels.GEMINI_2_5_FLASH, // Use cheaper model
-        max_tokens: 48000,
+        max_tokens: 32000, // Reduced from 48000 to save tokens while maintaining quality
         temperature: 1,
         fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
@@ -94,14 +94,14 @@ const PLATFORM_AGENT_CONFIG: AgentConfig = {
     deepDebugger: {
         name: AIModels.GROK_4_1_FAST,
         reasoning_effort: 'high',
-        max_tokens: 8000,
+        max_tokens: 5000, // Reduced from 8000 to save tokens
         temperature: 1,
         fallbackModel: AIModels.GEMINI_2_5_PRO,
     },
     fileRegeneration: {
         name: AIModels.GROK_4_1_FAST_NON_REASONING,
         reasoning_effort: 'low',
-        max_tokens: 16000,
+        max_tokens: 12000, // Reduced from 16000 to save tokens (25% reduction)
         temperature: 0.0,
         fallbackModel: AIModels.GROK_CODE_FAST_1,
     },
@@ -129,31 +129,31 @@ const DEFAULT_AGENT_CONFIG: AgentConfig = {
     blueprint: {
         name: AIModels.GEMINI_2_5_FLASH_LITE,
         reasoning_effort: 'low',
-        max_tokens: 8000,
+        max_tokens: 5000, // Reduced from 8000 to save tokens (37.5% reduction)
         fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
         temperature: 0.8,
     },
     projectSetup: {
         name: AIModels.GEMINI_2_5_FLASH_LITE,
-        max_tokens: 16000,
+        max_tokens: 12000, // Reduced from 16000 to save tokens (25% reduction)
         temperature: 0.8,
         fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     phaseGeneration: {
         name: AIModels.GEMINI_2_5_FLASH_LITE,
-        max_tokens: 6000,
+        max_tokens: 4000, // Reduced from 6000 to save tokens (33% reduction)
         temperature: 0.8,
         fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     firstPhaseImplementation: {
         name: AIModels.GEMINI_2_5_FLASH_LITE,
-        max_tokens: 16000,
+        max_tokens: 12000, // Reduced from 16000 to save tokens (25% reduction)
         temperature: 0.8,
         fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     phaseImplementation: {
         name: AIModels.GEMINI_2_5_FLASH_LITE,
-        max_tokens: 16000,
+        max_tokens: 12000, // Reduced from 16000 to save tokens (25% reduction)
         temperature: 0.8,
         fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
@@ -166,13 +166,13 @@ const DEFAULT_AGENT_CONFIG: AgentConfig = {
     },
     deepDebugger: {
         name: AIModels.GEMINI_2_5_FLASH_LITE,
-        max_tokens: 6000,
+        max_tokens: 4000, // Reduced from 6000 to save tokens (33% reduction)
         temperature: 0.8,
         fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
     fileRegeneration: {
         name: AIModels.GEMINI_2_5_FLASH_LITE,
-        max_tokens: 8000,
+        max_tokens: 6000, // Reduced from 8000 to save tokens (25% reduction)
         temperature: 0.4,
         fallbackModel: AIModels.GEMINI_2_5_FLASH_LITE,
     },
