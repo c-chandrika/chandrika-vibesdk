@@ -1,7 +1,4 @@
 import { isOriginAllowed } from '../../config/security';
-import { createLogger } from '../../logger';
-
-const logger = createLogger('WebSocketSecurity');
 
 export function validateWebSocketOrigin(request: Request, env: Env): boolean {
     const origin = request.headers.get('Origin');
@@ -13,17 +10,10 @@ export function validateWebSocketOrigin(request: Request, env: Env): boolean {
         if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
             return true;
         }
-
-        logger.warn('WebSocket connection attempt without Origin header');
         return false;
     }
     
-    if (!isOriginAllowed(env, origin)) {
-        logger.warn('WebSocket connection rejected from unauthorized origin', { origin });
-        return false;
-    }
-    
-    return true;
+    return isOriginAllowed(env, origin);
 }
 
 export function getWebSocketSecurityHeaders(): Record<string, string> {

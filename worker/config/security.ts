@@ -292,17 +292,10 @@ export function getSecureHeadersConfig(env: Env): SecureHeadersConfig {
             ],
             connectSrc: [
                 "'self'",
-                // WebSocket connections
-                "ws://localhost:*",
-                "wss://localhost:*",
-                `wss://${env.CUSTOM_DOMAIN || '*'}`,
-                // API endpoints
                 "https://api.github.com",
                 "https://api.cloudflare.com",
-                // Allow connections from allowed origins
-                ...allowedFrameAncestors.filter(origin => !origin.startsWith("'"))
             ],
-            frameSrc: ["'self'", ...allowedFrameAncestors.filter(origin => !origin.startsWith("'"))],
+            frameSrc: ["'self'"],
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],
             workerSrc: ["'self'", "blob:"],

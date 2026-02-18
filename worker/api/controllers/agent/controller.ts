@@ -22,7 +22,9 @@ import { getPreviewDomain } from 'worker/utils/urls';
 import { ImageType, uploadImage } from 'worker/utils/images';
 import { ProcessedImageAttachment } from 'worker/types/image-attachment';
 import { getTemplateImportantFiles } from 'worker/services/sandbox/utils';
-import { hasTicketParam } from '../../../middleware/auth/ticketAuth';
+import { hasTicketParam, getResourceStub, generateTicketToken } from '../../../middleware/auth/ticketAuth';
+import { extractTokenWithMetadata, TokenExtractionMethod } from '../../../utils/authUtils';
+import type { PendingWsTicket } from '../../../types/auth-types';
 
 const defaultCodeGenArgs: Partial<CodeGenArgs> = {
     language: 'typescript',
@@ -142,7 +144,40 @@ export class CodingAgentController extends BaseController {
 
             const { templateDetails, selection, projectType: finalProjectType } = await getTemplateForQuery(env, inferenceContext, query, projectType, body.images, this.logger);
 
-            const websocketUrl = `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/agent/${agentId}/ws`;
+            // Auto-generate WebSocket ticket for iframe contexts (Bearer token auth)
+            // This ensures WebSocket connections work in iframes where cookies aren't sent
+            let websocketUrl = `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/agent/${agentId}/ws`;
+            const tokenExtraction = extractTokenWithMetadata(request);
+            const isBearerTokenAuth = tokenExtraction.method === TokenExtractionMethod.AUTHORIZATION_HEADER;
+            
+            if (isBearerTokenAuth) {
+                // Create a WebSocket ticket automatically for iframe contexts
+                try {
+                    const TICKET_TTL_MS = 15_000; // 15 seconds
+                    const now = Date.now();
+                    const ticket: PendingWsTicket = {
+                        token: generateTicketToken('agent', agentId),
+                        user: user,
+                        sessionId: context.sessionId ?? `ticket:agent:${agentId}`,
+                        createdAt: now,
+                        expiresAt: now + TICKET_TTL_MS,
+                    };
+                    
+                    const resourceStub = await getResourceStub(env, 'agent', agentId);
+                    await resourceStub.storeWsTicket(ticket);
+                    
+                    // Include ticket in WebSocket URL
+                    websocketUrl = `${websocketUrl}?ticket=${encodeURIComponent(ticket.token)}`;
+                    this.logger.info('Auto-generated WebSocket ticket for iframe context', { agentId, userId: user.id });
+                } catch (error) {
+                    this.logger.warn('Failed to auto-generate WebSocket ticket, falling back to cookie auth', { 
+                        agentId, 
+                        error: error instanceof Error ? error.message : String(error) 
+                    });
+                    // Continue without ticket - will rely on cookie auth (may fail in iframe)
+                }
+            }
+            
             const httpStatusUrl = `${url.origin}/api/agent/${agentId}`;
 
             let uploadedImages: ProcessedImageAttachment[] = [];
@@ -240,8 +275,12 @@ export class CodingAgentController extends BaseController {
 
             // Origin validation only for non-ticket auth (ticket auth is origin-agnostic)
             const isTicketAuth = hasTicketParam(request);
-            if (!isTicketAuth && !validateWebSocketOrigin(request, env)) {
-                return new Response('Forbidden: Invalid origin', { status: 403 });
+            
+            if (!isTicketAuth) {
+                const originValid = validateWebSocketOrigin(request, env);
+                if (!originValid) {
+                    return new Response('Forbidden: Invalid origin', { status: 403 });
+                }
             }
 
             this.logger.info('WebSocket connection authorized', {
@@ -298,6 +337,12 @@ export class CodingAgentController extends BaseController {
 
             this.logger.info(`Connecting to existing agent: ${agentId}`);
 
+            // User already authenticated by middleware
+            const user = context.user;
+            if (!user) {
+                return CodingAgentController.createErrorResponse<AgentConnectionData>('Authentication required', 401);
+            }
+
             try {
                 // Verify the agent instance exists
                 const agentInstance = await getAgentStub(env, agentId);
@@ -308,7 +353,40 @@ export class CodingAgentController extends BaseController {
 
                 // Construct WebSocket URL
                 const url = new URL(request.url);
-                const websocketUrl = `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/agent/${agentId}/ws`;
+                let websocketUrl = `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/agent/${agentId}/ws`;
+                
+                // Auto-generate WebSocket ticket for iframe contexts (Bearer token auth)
+                // This ensures WebSocket connections work in iframes where cookies aren't sent
+                const tokenExtraction = extractTokenWithMetadata(request);
+                const isBearerTokenAuth = tokenExtraction.method === TokenExtractionMethod.AUTHORIZATION_HEADER;
+                
+                if (isBearerTokenAuth) {
+                    // Create a WebSocket ticket automatically for iframe contexts
+                    try {
+                        const TICKET_TTL_MS = 15_000; // 15 seconds
+                        const now = Date.now();
+                        const ticket: PendingWsTicket = {
+                            token: generateTicketToken('agent', agentId),
+                            user: user,
+                            sessionId: context.sessionId ?? `ticket:agent:${agentId}`,
+                            createdAt: now,
+                            expiresAt: now + TICKET_TTL_MS,
+                        };
+                        
+                        const resourceStub = await getResourceStub(env, 'agent', agentId);
+                        await resourceStub.storeWsTicket(ticket);
+                        
+                        // Include ticket in WebSocket URL
+                        websocketUrl = `${websocketUrl}?ticket=${encodeURIComponent(ticket.token)}`;
+                        this.logger.info('Auto-generated WebSocket ticket for iframe context (existing agent)', { agentId, userId: user.id });
+                    } catch (error) {
+                        this.logger.warn('Failed to auto-generate WebSocket ticket for existing agent, falling back to cookie auth', { 
+                            agentId, 
+                            error: error instanceof Error ? error.message : String(error) 
+                        });
+                        // Continue without ticket - will rely on cookie auth (may fail in iframe)
+                    }
+                }
 
                 const responseData: AgentConnectionData = {
                     websocketUrl,
