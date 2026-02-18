@@ -132,9 +132,90 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
 	const appName = subdomain;
 	const dispatcher = env['DISPATCHER'];
 
+	// CRITICAL FIX: Warmup mechanism to ensure routes are loaded before first request
+	// Generated apps load routes conditionally (only for certain API paths), which causes
+	// "matcher is already built" errors if the first request is to a path that doesn't
+	// trigger route loading (like /api/health). We fix this by making a warmup request
+	// to an endpoint that WILL trigger route loading, ensuring routes are set up before
+	// the actual request is processed.
+	//
+	// Strategy: For ALL API requests, we first make a warmup request to a path that will
+	// trigger route loading in the generated app. This ensures routes are loaded before
+	// any request that might build the matcher.
+	//
+	// Note: This is a workaround for the generated app code pattern. The proper fix
+	// would be to ensure routes are always loaded in generated apps, not conditionally.
+	if (pathname.startsWith('/api/')) {
+		try {
+			const worker = dispatcher.get(appName);
+			// Make a warmup request to an endpoint that will trigger route loading
+			// The generated app checks: pathname.startsWith('/api/') && pathname !== '/api/health' && pathname !== '/api/client-errors'
+			// So we use '/api/warmup' which will trigger route loading
+			const warmupUrl = new URL(request.url);
+			warmupUrl.pathname = '/api/warmup';
+			const warmupRequest = new Request(warmupUrl.toString(), {
+				method: 'GET',
+				headers: request.headers,
+			});
+			
+			// Make the warmup request and wait for it (this will trigger route loading)
+			// We ignore 404s since the warmup endpoint doesn't exist - we just need routes loaded
+			try {
+				const warmupResponse = await worker.fetch(warmupRequest);
+				// Expected - the warmup endpoint doesn't exist (404), but routes should now be loaded
+				// We consume the response to ensure the request completes
+				await warmupResponse.text().catch(() => {});
+				logger.debug(`Warmup completed for '${appName}' (routes should now be loaded)`);
+			} catch (warmupError) {
+				// Warmup request itself failed - this is okay, we'll continue with the actual request
+				logger.debug(`Warmup request failed for '${appName}' (non-fatal): ${warmupError instanceof Error ? warmupError.message : String(warmupError)}`);
+			}
+		} catch (e) {
+			// If we can't even get the worker, log but continue - the actual request will handle the error
+			logger.warn(`Warmup setup failed for '${appName}': ${e instanceof Error ? e.message : String(e)}`);
+		}
+	}
+
 	try {
 		const worker = dispatcher.get(appName);
 		const dispatcherResponse = await worker.fetch(request);
+
+		// Check if the response indicates an error from the generated app
+		if (dispatcherResponse.status >= 500) {
+			try {
+				const errorBody = await dispatcherResponse.clone().text();
+				logger.error(`Generated app '${appName}' returned ${dispatcherResponse.status} for ${pathname}: ${errorBody.substring(0, 500)}`);
+				
+				// Check for the specific Hono routing error
+				if (errorBody.includes('matcher is already built') || errorBody.includes('Can not add a route')) {
+					logger.error(`ROOT CAUSE: Generated app '${appName}' is trying to add routes after the Hono app has already handled a request. This is a code generation issue - routes must be added before the first request.`);
+					
+					// Try to parse JSON error response if present
+					try {
+						const errorJson = JSON.parse(errorBody);
+						if (errorJson.error || errorJson.detail) {
+							return new Response(JSON.stringify({
+								success: false,
+								error: errorJson.error || 'Worker routes failed to load',
+								detail: errorJson.detail || 'The generated app has a routing configuration error. Routes are being added dynamically after the app has already handled requests, which is not allowed in Hono.',
+								help: 'This is a code generation issue. The generated app worker code needs to set up all routes before handling any requests. Please regenerate or fix the app code.'
+							}), {
+								status: 500,
+								headers: {
+									'Content-Type': 'application/json',
+									'X-Preview-Type': 'dispatcher-error',
+									'X-Error-Type': 'hono-routing-error'
+								}
+							});
+						}
+					} catch {
+						// Not JSON, return the original error
+					}
+				}
+			} catch (e) {
+				logger.error(`Failed to read error body from generated app '${appName}': ${e instanceof Error ? e.message : String(e)}`);
+			}
+		}
 
 		// Add headers to identify this as a dispatcher response
 		let headers = new Headers(dispatcherResponse.headers);
