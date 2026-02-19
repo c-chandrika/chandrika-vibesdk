@@ -173,7 +173,7 @@
     //     },
     //     {
     //         "pattern": "*vibesdk-nxtwave.tech/*",
-    //         "custom_domain": false
+    //         "custom_domain": true
     //     }
     // ]
 }
