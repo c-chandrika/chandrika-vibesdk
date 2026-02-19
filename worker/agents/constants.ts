@@ -127,7 +127,7 @@ export const getMaxToolCallingDepth = (agentActionKey: AgentActionKey | 'testMod
         case 'deepDebugger':
             return 40;
         case 'agenticProjectBuilder':
-            return 100;
+            return 30; // Reduced from 100 to reduce API token usage
         default:
             return MAX_TOOL_CALLING_DEPTH_DEFAULT;
     }

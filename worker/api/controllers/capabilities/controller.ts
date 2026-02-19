@@ -32,7 +32,10 @@ export class CapabilitiesController extends BaseController {
 		_ctx: ExecutionContext,
 		_context: RouteContext,
 	): Promise<ControllerResponse<ApiResponse<CapabilitiesData>>> {
-		const config = env.PLATFORM_CAPABILITIES;
+		// Parse PLATFORM_CAPABILITIES from JSON string (Wrangler vars are always strings)
+		const config = typeof env.PLATFORM_CAPABILITIES === 'string' 
+			? JSON.parse(env.PLATFORM_CAPABILITIES) 
+			: env.PLATFORM_CAPABILITIES;
 
 		// Build feature list by merging defaults with enabled status from config
 		const features: FeatureDefinition[] = [
