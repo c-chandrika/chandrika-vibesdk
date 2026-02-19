@@ -93,6 +93,26 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
             try {
                 const errorText = await sandboxResponse.clone().text();
                 logger.error(`Sandbox returned 500 for ${hostname}${pathname}: ${errorText.substring(0, 500)}`);
+                
+                // Check for Hono route matcher error
+                if (errorText.includes('matcher is already built') || errorText.includes('Can not add a route')) {
+                    logger.error(`Route registration error detected in sandbox: ${hostname}. The worker is trying to register routes after the matcher has been built.`);
+                    // Replace error response with helpful message
+                    const helpfulMessage = JSON.stringify({
+                        success: false,
+                        error: "Worker routes failed to load",
+                        detail: "Can not add a route since the matcher is already built.",
+                        help: "This error occurs when routes are registered inside the fetch handler instead of at module level. Ensure all routes are registered once at module level before the fetch handler is called."
+                    });
+                    return new Response(helpfulMessage, {
+                        status: 500,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Preview-Type': 'sandbox-error'
+                        }
+                    });
+                }
+                
                 // If it's an API route and the error suggests the route doesn't exist,
                 // this likely means the backend isn't running in the sandbox
                 if (pathname.startsWith('/api/') && (errorText.includes('404') || errorText.includes('Not Found') || errorText.length === 0)) {
@@ -171,13 +191,18 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
 
 		// Provide more helpful error message
 		let errorMessage: string;
-		if (error.message?.includes('not found') || error.message?.includes('does not exist')) {
+		const errorMsg = error.message || '';
+		
+		// Check for Hono route matcher error
+		if (errorMsg.includes('matcher is already built') || errorMsg.includes('Can not add a route')) {
+			errorMessage = `Worker routes failed to load: The application's worker is trying to register routes after the route matcher has been built. This typically happens when routes are registered inside the fetch handler instead of at module level. Please ensure all routes are registered once at module level before the fetch handler is called.`;
+		} else if (errorMsg.includes('not found') || errorMsg.includes('does not exist')) {
 			errorMessage = `Application '${appName}' has not been deployed yet. Please deploy the app first.`;
 		} else if (hostname.includes('.localhost')) {
 			// For localhost preview URLs, the issue is likely that exposePort() format doesn't match routing
 			errorMessage = `Preview URL format not supported for local development. The sandbox instance may not be running, or the preview URL format from exposePort() doesn't match the expected routing pattern. If a tunnel URL is available, use that instead.`;
 		} else {
-			errorMessage = `An error occurred while loading this application: ${error.message || 'Unknown error'}`;
+			errorMessage = `An error occurred while loading this application: ${errorMsg || 'Unknown error'}`;
 		}
 
 		return new Response(errorMessage, { 

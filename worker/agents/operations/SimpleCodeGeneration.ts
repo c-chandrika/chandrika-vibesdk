@@ -37,7 +37,15 @@ Your task is to generate production-ready code files specifically based on the p
 - Add proper error handling
 - Include JSDoc comments where helpful
 - Consider the context of existing files when generating new code
-- Ensure new code integrates well with previously generated files`;
+- Ensure new code integrates well with previously generated files
+
+## Hono Worker Route Registration (CRITICAL)
+When generating Cloudflare Worker files with Hono (e.g., \`src/worker.ts\`, \`worker/index.ts\`):
+- Create Hono app instance at MODULE LEVEL (outside fetch handler)
+- Register ALL routes at MODULE LEVEL (before export)
+- Export fetch handler that reuses the same app instance
+- NEVER register routes inside the fetch handler (causes "matcher already built" error)
+- See COMMON_PITFALLS section for detailed examples`;
 
 const USER_PROMPT = `
 <PROJECT_CONTEXT>

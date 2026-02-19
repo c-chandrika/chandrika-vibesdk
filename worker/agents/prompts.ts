@@ -425,6 +425,61 @@ COMMON_PITFALLS: `<AVOID COMMON PITFALLS>
     # Never write image files! Never write jpeg, png, svg, etc files yourself! Always use some image url from the web.
     **Do not recommend installing \`cloudflare:workers\` or \`cloudflare:durable-objects\` as dependencies, these are already installed in the project always.**
 
+    **HONO WORKER ROUTE REGISTRATION (CRITICAL - PREVENTS "MATCHER ALREADY BUILT" ERRORS):**
+    When creating Cloudflare Worker files with Hono (e.g., \`src/worker.ts\`, \`worker/index.ts\`), you MUST follow this pattern to prevent route registration errors:
+    
+    ✅ **CORRECT PATTERN (Module-Level Route Registration):**
+    \`\`\`typescript
+    // src/worker.ts or worker/index.ts
+    import { Hono } from 'hono';
+    
+    // Create app instance at module level (ONCE)
+    const app = new Hono();
+    
+    // Register ALL routes at module level (ONCE, before any fetch calls)
+    app.get('/api/todos', async (c) => {
+        return c.json({ todos: [] });
+    });
+    
+    app.post('/api/todos', async (c) => {
+        // handler
+    });
+    
+    // Export fetch handler that reuses the app instance
+    export default {
+        fetch: app.fetch.bind(app)
+    };
+    \`\`\`
+    
+    ❌ **WRONG PATTERNS (Will cause "Can not add a route since the matcher is already built" error):**
+    \`\`\`typescript
+    // WRONG: Registering routes in fetch handler
+    export default {
+        fetch: async (req, env, ctx) => {
+            const app = new Hono();
+            app.get('/api/todos', handler); // ERROR: Matcher built on first request, fails on second
+            return app.fetch(req);
+        }
+    };
+    
+    // WRONG: Registering routes multiple times
+    const app = new Hono();
+    app.get('/api/todos', handler);
+    export default {
+        fetch: async (req) => {
+            app.get('/api/todos', handler); // ERROR: Trying to register again
+            return app.fetch(req);
+        }
+    };
+    \`\`\`
+    
+    **Key Rules:**
+    1. Create Hono app instance at module level (outside fetch handler)
+    2. Register ALL routes at module level (before export)
+    3. Export fetch handler that reuses the same app instance
+    4. NEVER register routes inside the fetch handler
+    5. NEVER try to register routes after the first request (matcher is built on first fetch)
+
 </AVOID COMMON PITFALLS>`,
     COMMON_DEP_DOCUMENTATION: `<COMMON DEPENDENCY DOCUMENTATION>
     • **The @xyflow/react package doesn't export a default ReactFlow, it exports named imports.**
