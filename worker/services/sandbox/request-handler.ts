@@ -82,11 +82,56 @@ export async function proxyToSandbox<E extends SandboxEnv>(
       proxyUrl,
     });
 
-    return await sandbox.containerFetch(proxyRequest, port);
+    const response = await sandbox.containerFetch(proxyRequest, port);
+    
+    // Enhanced error logging for API routes
+    if (response && path.startsWith('/api/')) {
+      const status = response.status;
+      if (status >= 500) {
+        try {
+          // Clone response to read body without consuming it
+          const clonedResponse = response.clone();
+          const errorText = await clonedResponse.text();
+          logger.error(`Sandbox API error for ${path}`, {
+            sandboxId,
+            port,
+            status,
+            method: request.method,
+            errorPreview: errorText.substring(0, 500),
+            proxyUrl,
+          });
+        } catch (e) {
+          logger.error(`Sandbox API error for ${path} (could not read body)`, {
+            sandboxId,
+            port,
+            status,
+            method: request.method,
+            error: e instanceof Error ? e.message : String(e),
+            proxyUrl,
+          });
+        }
+      } else if (status >= 400) {
+        logger.warn(`Sandbox API client error for ${path}`, {
+          sandboxId,
+          port,
+          status,
+          method: request.method,
+          proxyUrl,
+        });
+      }
+    }
+    
+    return response;
   } catch (error) {
+    const url = new URL(request.url);
     logger.error(
       'Proxy routing error',
-      error instanceof Error ? error : new Error(String(error))
+      {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: url.pathname,
+        method: request.method,
+      }
     );
     return new Response('Proxy routing error', { status: 500 });
   }

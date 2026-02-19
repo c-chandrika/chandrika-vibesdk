@@ -72,6 +72,12 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
 	// For API routes on preview subdomains, try sandbox first, but if it fails with 500,
 	// the backend in the sandbox might not be running or the route might not exist.
 	// We'll let the sandbox handle it and return the error, as the app's backend should be in the sandbox.
+	//
+	// NOTE: trycloudflare.com tunnel URLs bypass the worker entirely and go directly to the sandbox
+	// via cloudflared tunnel. For those URLs, errors come directly from the sandbox container's
+	// dev server. This function only handles requests that go through the worker (subdomain patterns
+	// or when tunnel URLs are intercepted). For tunnel URLs, the sandbox container's dev server
+	// must properly handle API routes.
 	
 	// 1. Attempt to proxy to a live development sandbox.
 	// proxyToSandbox doesn't consume the request body on a miss, so no clone is needed here.
@@ -87,19 +93,47 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
 		// Add headers to identify this as a sandbox response
 		let headers = new Headers(sandboxResponse.headers);
 		
-        if (sandboxResponse.status === 500) {
+        if (sandboxResponse.status >= 500) {
             headers.set('X-Preview-Type', 'sandbox-error');
-            // Log the error body for debugging
-            try {
-                const errorText = await sandboxResponse.clone().text();
-                logger.error(`Sandbox returned 500 for ${hostname}${pathname}: ${errorText.substring(0, 500)}`);
-                // If it's an API route and the error suggests the route doesn't exist,
-                // this likely means the backend isn't running in the sandbox
-                if (pathname.startsWith('/api/') && (errorText.includes('404') || errorText.includes('Not Found') || errorText.length === 0)) {
-                    logger.warn(`API route ${pathname} not found in sandbox. The generated app's backend may not be running. Generated apps with backend APIs need their backend worker to be running in the sandbox.`);
+            // Enhanced error logging for API routes
+            if (pathname.startsWith('/api/')) {
+                try {
+                    const errorText = await sandboxResponse.clone().text();
+                    logger.error(`Sandbox API 500 error for ${hostname}${pathname}`, {
+                        status: sandboxResponse.status,
+                        errorPreview: errorText.substring(0, 1000),
+                        method: request.method,
+                        isTunnelUrl: hostname.includes('trycloudflare.com'),
+                    });
+                    
+                    // Provide more specific error context
+                    if (errorText.includes('404') || errorText.includes('Not Found') || errorText.length === 0) {
+                        logger.warn(`API route ${pathname} not found in sandbox. The generated app's backend may not be running or the route doesn't exist. Generated apps with backend APIs need their backend server to be running in the sandbox.`);
+                    } else if (errorText.includes('ECONNREFUSED') || errorText.includes('Connection refused')) {
+                        logger.error(`API route ${pathname} - Connection refused. The backend server in the sandbox may not be running on the expected port.`);
+                    } else if (errorText.includes('timeout') || errorText.includes('Timeout')) {
+                        logger.error(`API route ${pathname} - Request timeout. The backend server in the sandbox may be unresponsive.`);
+                    }
+                } catch (e) {
+                    logger.error(`Sandbox returned ${sandboxResponse.status} for ${hostname}${pathname}, but couldn't read error body`, {
+                        error: e instanceof Error ? e.message : String(e),
+                        method: request.method,
+                        isTunnelUrl: hostname.includes('trycloudflare.com'),
+                    });
                 }
-            } catch (e) {
-                logger.error(`Sandbox returned 500 for ${hostname}${pathname}, but couldn't read error body: ${e instanceof Error ? e.message : String(e)}`);
+            } else {
+                // Log non-API 500 errors too
+                try {
+                    const errorText = await sandboxResponse.clone().text();
+                    logger.error(`Sandbox returned ${sandboxResponse.status} for ${hostname}${pathname}`, {
+                        errorPreview: errorText.substring(0, 500),
+                        method: request.method,
+                    });
+                } catch (e) {
+                    logger.error(`Sandbox returned ${sandboxResponse.status} for ${hostname}${pathname}, but couldn't read error body`, {
+                        error: e instanceof Error ? e.message : String(e),
+                    });
+                }
             }
         } else {
             headers.set('X-Preview-Type', 'sandbox');
@@ -224,6 +258,11 @@ const worker = {
 		const isSubdomainRequest =
 			hostname.endsWith(`.${previewDomain}`) ||
 			(hostname.endsWith('.localhost') && hostname !== 'localhost');
+		
+		// Check if this is a trycloudflare.com tunnel URL
+		// These URLs go directly to sandbox via tunnel, but we should still try to proxy through worker
+		// for better error handling and logging
+		const isTunnelUrl = hostname.includes('trycloudflare.com');
 
 		// Route 1: Main Platform Request (e.g., build.cloudflare.dev or localhost)
 		if (isMainDomainRequest) {
@@ -260,7 +299,8 @@ const worker = {
 		}
 
 		// Route 2: User App Request (e.g., xyz.build.cloudflare.dev or test.localhost)
-		if (isSubdomainRequest) {
+		// Also handle trycloudflare.com tunnel URLs - these should proxy to sandbox
+		if (isSubdomainRequest || isTunnelUrl) {
 			return handleUserAppRequest(request, env);
 		}
 

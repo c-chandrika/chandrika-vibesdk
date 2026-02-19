@@ -16,10 +16,11 @@ import { setupAdminRoutes } from './adminRoutes';
 import { Hono } from "hono";
 import { AppEnv } from "../../types/appenv";
 import { setupStatusRoutes } from './statusRoutes';
+import { AuthConfig, setAuthLevel } from '../../middleware/auth/routeAuth';
 
 export function setupRoutes(app: Hono<AppEnv>): void {
-    // Health check route
-    app.get('/api/health', (c) => {
+    // Health check route (public - no auth required)
+    app.get('/api/health', setAuthLevel(AuthConfig.public), (c) => {
         return c.json({ status: 'ok' });
     }); 
     
