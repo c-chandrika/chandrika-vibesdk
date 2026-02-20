@@ -39,13 +39,47 @@ export async function proxyToSandbox<E extends SandboxEnv>(
 
     logger.info("[Proxy] Sandbox", sandbox, "Port", port, "Path", path, "Token", token);
 
+    // Filter out forbidden headers that browsers cannot set
+    // These headers are set by the browser/network layer and should not be forwarded
+    const forbiddenHeaders = new Set([
+      'mf-proxy-shared-secret', // Miniflare/Cloudflare Workers internal header (case-insensitive)
+      'host', // Host header is set automatically
+      'connection', // Connection header is managed by the runtime
+      'upgrade', // Upgrade header is handled separately for WebSockets
+      'keep-alive', // Keep-alive is managed by the runtime
+      'transfer-encoding', // Transfer-encoding is managed by the runtime
+      'te', // TE header is managed by the runtime
+      'trailer', // Trailer header is managed by the runtime
+    ]);
+
+    // Helper function to filter headers from a request
+    const filterHeaders = (req: Request): Headers => {
+      const filtered = new Headers();
+      for (const [key, value] of req.headers.entries()) {
+        const lowerKey = key.toLowerCase();
+        if (!forbiddenHeaders.has(lowerKey)) {
+          filtered.set(key, value);
+        }
+      }
+      return filtered;
+    };
+
     // Detect WebSocket upgrade request
     const upgradeHeader = request.headers.get('Upgrade');
     if (upgradeHeader?.toLowerCase() === 'websocket') {
       logger.info("[Proxy] WebSocket upgrade request", upgradeHeader, "Port", port, "Path", path, "Token", token);
       // WebSocket path: Must use fetch() not containerFetch()
       // This bypasses JSRPC serialization boundary which cannot handle WebSocket upgrades
-      return await sandbox.fetch(switchPort(request, port));
+      // Filter headers before switching port to prevent forbidden header errors
+      const filteredHeaders = filterHeaders(request);
+      const filteredRequest = new Request(request.url, {
+        method: request.method,
+        headers: filteredHeaders,
+        body: request.body,
+        // @ts-expect-error - duplex required for body streaming in modern runtimes
+        duplex: 'half',
+      });
+      return await sandbox.fetch(switchPort(filteredRequest, port));
     }
 
     // Build proxy request with proper headers
@@ -60,10 +94,19 @@ export async function proxyToSandbox<E extends SandboxEnv>(
       proxyUrl = `http://localhost:3000${path}${url.search}`;
     }
 
+    // Build filtered headers object (using the same filter function defined above)
+    const filteredHeadersObj: Record<string, string> = {};
+    for (const [key, value] of request.headers.entries()) {
+      const lowerKey = key.toLowerCase();
+      if (!forbiddenHeaders.has(lowerKey)) {
+        filteredHeadersObj[key] = value;
+      }
+    }
+
     const proxyRequest = new Request(proxyUrl, {
       method: request.method,
       headers: {
-        ...Object.fromEntries(request.headers),
+        ...filteredHeadersObj,
         'X-Original-URL': request.url,
         'X-Forwarded-Host': url.hostname,
         'X-Forwarded-Proto': url.protocol.replace(':', ''),

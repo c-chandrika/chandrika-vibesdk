@@ -84,6 +84,24 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
 	const sandboxResponse = await proxyToSandbox(request, env);
 	if (sandboxResponse) {
 		logger.info(`Serving response from sandbox for: ${hostname}${pathname}, status: ${sandboxResponse.status}`);
+		
+		// Enhanced error logging for router errors
+		if (sandboxResponse.status >= 500) {
+			try {
+				const errorText = await sandboxResponse.clone().text();
+				if (errorText.includes('matcher is already built') || errorText.includes('routes failed to load')) {
+					logger.error(`Hono router error in sandbox for ${hostname}${pathname}`, {
+						status: sandboxResponse.status,
+						error: errorText.substring(0, 500),
+						pathname,
+						hostname,
+						message: 'The generated app is trying to add routes after the router has been built. This is a bug in the generated app code, not the worker routing.',
+					});
+				}
+			} catch (e) {
+				// Ignore errors reading response body
+			}
+		}
         // If it was a websocket upgrade, we need to return the response as is
         if (sandboxResponse.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
             logger.info(`Serving websocket response from sandbox for: ${hostname}`);
@@ -253,8 +271,11 @@ const worker = {
 		// Normalize hostnames for both local development (localhost) and production.
 		// Remove protocol from CUSTOM_DOMAIN if present for comparison
 		const customDomain = env.CUSTOM_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '');
+		// Main domain includes: custom domain, localhost, and workers.dev domains
 		const isMainDomainRequest =
-			hostname === customDomain || hostname === 'localhost';
+			hostname === customDomain || 
+			hostname === 'localhost' ||
+			hostname.endsWith('.workers.dev');
 		const isSubdomainRequest =
 			hostname.endsWith(`.${previewDomain}`) ||
 			(hostname.endsWith('.localhost') && hostname !== 'localhost');
@@ -265,6 +286,8 @@ const worker = {
 		const isTunnelUrl = hostname.includes('trycloudflare.com');
 
 		// Route 1: Main Platform Request (e.g., build.cloudflare.dev or localhost)
+		// Tunnel URLs (trycloudflare.com) are for generated apps, so all their API requests should go to sandbox
+		// Only route to platform app if it's the main domain, not a tunnel URL
 		if (isMainDomainRequest) {
 			// Handle Git protocol endpoints directly
 			// Route: /apps/:id.git/info/refs or /apps/:id.git/git-upload-pack
@@ -299,7 +322,7 @@ const worker = {
 		}
 
 		// Route 2: User App Request (e.g., xyz.build.cloudflare.dev or test.localhost)
-		// Also handle trycloudflare.com tunnel URLs - these should proxy to sandbox
+		// All tunnel URLs (trycloudflare.com) are for generated apps - route all requests to sandbox
 		if (isSubdomainRequest || isTunnelUrl) {
 			return handleUserAppRequest(request, env);
 		}

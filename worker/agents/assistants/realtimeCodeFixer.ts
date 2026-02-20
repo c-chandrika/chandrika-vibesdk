@@ -72,6 +72,12 @@ Review Process:
       - Zustand selector anti-patterns that cause unstable references:
         - Object-literal selectors with destructuring: const { a, b } = useStore((s) => ({ a: s.a, b: s.b }))
         - Fix required: select primitives individually with separate useStore(...) calls for each value
+   a1. **Hono Route Setup Errors (Backend/Server files only):**
+      - Routes added conditionally: \`if (condition) { app.get('/api/route', handler); }\`
+      - Routes added in functions that might be called multiple times
+      - Routes added after app export or after app has been used
+      - Fix: All routes MUST be added at module initialization, before export
+      - Pattern: \`const app = new Hono(); app.get(...); app.post(...); export default app;\`
    b. Import/Export integrity errors
       - @xyflow/react: Must use { ReactFlow }, not default import
       - Missing @/lib/utils import for cn function

@@ -344,6 +344,37 @@ COMMON_PITFALLS: `<AVOID COMMON PITFALLS>
     •   Component exports: Export all components properly, avoid mixing default/named imports
     •   UI spacing: Ensure proper padding/margins, avoid left-aligned layouts without proper spacing
 
+    **🔥 CRITICAL: HONO ROUTE SETUP (Backend/Server Routes) - ZERO TOLERANCE:**
+    When creating backend API routes with Hono, you MUST follow this pattern to prevent "matcher is already built" errors:
+    
+    ✅ **CORRECT PATTERN (Always use this):**
+    \`\`\`typescript
+    import { Hono } from 'hono';
+    
+    // Create app instance ONCE at module level
+    const app = new Hono();
+    
+    // Add ALL routes immediately after app creation, BEFORE any exports
+    app.get('/api/todos', async (c) => {
+        return c.json({ todos: [] });
+    });
+    
+    app.post('/api/todos', async (c) => {
+        // handler code
+    });
+    
+    // Export the app AFTER all routes are added
+    export default app;
+    \`\`\`
+    
+    ❌ **WRONG PATTERNS (Will cause "matcher is already built" error):**
+    - Adding routes conditionally: \`if (condition) { app.get('/api/route', handler); }\`
+    - Adding routes in functions: \`function setupRoutes() { app.get(...) }\` then calling it multiple times
+    - Adding routes after the app has handled a request
+    - Adding routes in hot-reload scenarios that re-execute code
+    
+    **RULE:** All routes MUST be added at module initialization time, in a single pass, before the app instance is exported or used. Never add routes conditionally, in loops, or in functions that might be called multiple times.
+
     **PROPER IMPORTS**:
        - **Importing React and other libraries should be done correctly.**
 
