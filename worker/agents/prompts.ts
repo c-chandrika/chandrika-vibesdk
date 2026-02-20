@@ -345,16 +345,18 @@ COMMON_PITFALLS: `<AVOID COMMON PITFALLS>
     •   UI spacing: Ensure proper padding/margins, avoid left-aligned layouts without proper spacing
 
     **🔥 CRITICAL: HONO ROUTE SETUP (Backend/Server Routes) - ZERO TOLERANCE:**
-    When creating backend API routes with Hono, you MUST follow this pattern to prevent "matcher is already built" errors:
+    When creating backend API routes with Hono, you MUST follow this pattern to prevent "matcher is already built" errors.
+    This is especially critical in deployed worker environments where modules may be cached and re-executed during hot reload.
     
-    ✅ **CORRECT PATTERN (Always use this):**
+    ✅ **CORRECT PATTERN (Always use this - prevents issues in both local and deployed environments):**
     \`\`\`typescript
     import { Hono } from 'hono';
     
-    // Create app instance ONCE at module level
+    // Create app instance ONCE at module level (module is cached, but routes are only added once)
     const app = new Hono();
     
     // Add ALL routes immediately after app creation, BEFORE any exports
+    // IMPORTANT: Do this in a single execution block, not in functions or conditionally
     app.get('/api/todos', async (c) => {
         return c.json({ todos: [] });
     });
@@ -364,16 +366,45 @@ COMMON_PITFALLS: `<AVOID COMMON PITFALLS>
     });
     
     // Export the app AFTER all routes are added
+    // The module will be cached, but routes are already set up
     export default app;
     \`\`\`
     
-    ❌ **WRONG PATTERNS (Will cause "matcher is already built" error):**
-    - Adding routes conditionally: \`if (condition) { app.get('/api/route', handler); }\`
-    - Adding routes in functions: \`function setupRoutes() { app.get(...) }\` then calling it multiple times
+    ✅ **ALTERNATIVE SAFE PATTERN (If you need conditional route setup):**
+    \`\`\`typescript
+    import { Hono } from 'hono';
+    
+    // Use a guard to prevent re-adding routes during hot reload
+    let app: Hono | null = null;
+    
+    function getApp() {
+        if (!app) {
+            app = new Hono();
+            // Add all routes here - this block only executes once
+            app.get('/api/todos', async (c) => {
+                return c.json({ todos: [] });
+            });
+        }
+        return app;
+    }
+    
+    export default getApp();
+    \`\`\`
+    
+    ❌ **WRONG PATTERNS (Will cause "matcher is already built" error in deployed workers):**
+    - Adding routes conditionally: \`if (condition) { app.get('/api/route', handler); }\` (condition might be true multiple times)
+    - Adding routes in functions called multiple times: \`function setupRoutes() { app.get(...) }\` then calling it in multiple places
     - Adding routes after the app has handled a request
     - Adding routes in hot-reload scenarios that re-execute code
+    - Creating app instance inside a function that gets called multiple times
     
-    **RULE:** All routes MUST be added at module initialization time, in a single pass, before the app instance is exported or used. Never add routes conditionally, in loops, or in functions that might be called multiple times.
+    **ROOT CAUSE IN DEPLOYED WORKERS:**
+    - Deployed worker environments cache modules and may re-execute them during hot reload
+    - Local dev often restarts the server completely, clearing state
+    - If routes are added conditionally or in functions, hot reload can cause routes to be added multiple times
+    - The Hono router builds its matcher on first use, and adding routes after that causes the error
+    
+    **RULE:** All routes MUST be added at module initialization time, in a single pass, before the app instance is exported or used. Use a singleton pattern with a guard if you need conditional setup. Never add routes conditionally, in loops, or in functions that might be called multiple times during hot reload.
 
     **PROPER IMPORTS**:
        - **Importing React and other libraries should be done correctly.**
